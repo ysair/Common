@@ -1,0 +1,6 @@
+编译开关文件: CommonFramework.inc
+
+编译开关有:
+{$DEFINE FRAMEWORK_INCLUDE_XML}	//是否在框架基类中引用XML
+
+{$DEFINE FRAMEWORK_INCLUDE_DB}	//是否在框架基类中引用DB
