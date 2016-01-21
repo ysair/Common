@@ -76,6 +76,7 @@ type
   end;
   {$MethodInfo OFF}
 
+  {$IFDEF FRAMEWORK_INCLUDE_DB}
   //支持数据库操作的ServerObject基类
   TCFDBServerObject = class(TCFServerObject)
   protected
@@ -125,6 +126,7 @@ type
     class function GetNewID(const ATableName : string;
         const AIDFieldName : string; out ErrMsg : string):Integer;
   end;
+  {$ENDIF}
 
 implementation
 
@@ -379,6 +381,7 @@ begin
     end;
 end;
 
+{$IFDEF FRAMEWORK_INCLUDE_DB}
 { TCFDSServerObject }
 
 function TCFDBServerObject.GetStorage: ICFDataBaseStorage;
@@ -713,5 +716,6 @@ begin
   else
     Result  :=  -1;
 end;
+{$ENDIF}
 
 end.
