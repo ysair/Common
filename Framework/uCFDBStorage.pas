@@ -43,6 +43,7 @@ type
     function  Update(const ADataSet : TClientDataSet):boolean; virtual;
     function  RefreshCache : Boolean; virtual;
     function  BaseQuery(const ASQL : string) : TDataSet; virtual;
+    procedure DoLoadConfig; virtual;
     //ICFAuotRecycle
     function  GetAutoRecycle : boolean; virtual;
     procedure SetAutoRecycle(const AValue : Boolean); virtual;
@@ -91,6 +92,22 @@ begin
   inherited;
 end;
 
+procedure TCFDBStorage.DoLoadConfig;
+var
+  pool  : ICFInterfacePool;
+begin
+  if Assigned(Builder) then
+  begin
+    pool := Builder.GetPool;
+    if Assigned(pool) then
+      pool.SetClearPoolInterval(CFGlobal.Config.DataBase.ClearPool_Interval);
+  end;
+  FAutoRecycle_Interval   :=  CFGlobal.Config.DataBase.AutoRecycle_Interval;
+  FDisconnection_Interval :=  CFGlobal.Config.DataBase.Disconnection_Interval;
+  ConnectionString  :=  CFGlobal.Config.DataBase.ConnectionString;
+  Provider  :=  CFGlobal.Config.DataBase.Provider;
+end;
+
 procedure TCFDBStorage.DoWorking;
 begin
   FWorking  :=  True;
@@ -119,23 +136,10 @@ end;
 
 procedure TCFDBStorage.OnNotifyMessage(Msg: UINT; wParam: WPARAM;
   lParam: LPARAM);
-var
-  pool  : ICFInterfacePool;
 begin
   case Msg of
     CF_MSG_Config_Changed :
-      begin
-        if Assigned(Builder) then
-        begin
-          pool := Builder.GetPool;
-          if Assigned(pool) then
-            pool.SetClearPoolInterval(CFGlobal.Config.DataBase.ClearPool_Interval);
-        end;
-        FAutoRecycle_Interval   :=  CFGlobal.Config.DataBase.AutoRecycle_Interval;
-        FDisconnection_Interval :=  CFGlobal.Config.DataBase.Disconnection_Interval;
-        ConnectionString  :=  CFGlobal.Config.DataBase.ConnectionString;
-        Provider  :=  CFGlobal.Config.DataBase.Provider;
-      end;
+      DoLoadConfig;
     CF_MSG_DB_RefreshCache  :
       if Connected then
         RefreshCache;
@@ -156,6 +160,8 @@ procedure TCFDBStorage.OnIdleTimer(Sender: TObject);
 var
   idletime : DWORD;
 begin
+  if FLastWorkTime = 0 then
+    Exit;
   idletime  :=  GetTickCount - FLastWorkTime;
   if (FDisconnection_Interval > 0) and (Integer(idletime) > FDisconnection_Interval) then
     CloseConnection;

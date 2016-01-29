@@ -52,7 +52,9 @@ const //消息定义
 const //数据库常量
   DB_Disconnection_Interval = 5 * 60 * 1000;  //5分钟 断开连接
   DB_ClearPool_Interval     = 10 * 60 * 1000; //10分钟 清空池
-  DB_AutoRecycle_Interval   = 0;//30 * 1000;      //30秒 自动回收
+  DB_AutoRecycle_Interval   = 0;//30 * 1000;   //30秒 自动回收
+  DB_Connection_Timeout     = 30;      //30秒连接超时
+  DB_Command_Timeout        = 5 * 60;  //5分钟命令超时
   DB_Def_StorageBuilder     = 'TADODBStorageBuilder';
 
   DB_DefField_ID            = 'ID';

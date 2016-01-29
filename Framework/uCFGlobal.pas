@@ -19,6 +19,8 @@ type
     FBuilder: string;
     FAutoRecycle_Interval: Integer;
     FProvider: string;
+    FConnection_Timeout: Integer;
+    FCommand_Timeout: Integer;
   public
     constructor Create; override;
   published
@@ -28,6 +30,8 @@ type
     property Disconnection_Interval : Integer read FDisconnection_Interval write FDisconnection_Interval;
     property ClearPool_Interval : Integer read FClearPool_Interval write FClearPool_Interval;
     property AutoRecycle_Interval : Integer read FAutoRecycle_Interval write FAutoRecycle_Interval;
+    property Connection_Timeout : Integer read FConnection_Timeout write FConnection_Timeout;
+    property Command_Timeout : Integer read FCommand_Timeout write FCommand_Timeout;
   end;
 
   //»’÷æ≈‰÷√¿‡
@@ -112,6 +116,8 @@ begin
   Disconnection_Interval  :=  DB_Disconnection_Interval;
   ClearPool_Interval      :=  DB_ClearPool_Interval;
   AutoRecycle_Interval    :=  DB_AutoRecycle_Interval;
+  Connection_Timeout      :=  DB_Connection_Timeout;
+  Command_Timeout         :=  DB_Command_Timeout;
   Builder                 :=  DB_Def_StorageBuilder;
 end;
 

@@ -16,7 +16,7 @@ type
   TCFLogType = (ltNone, ltMessage, ltError);
 
   TInterfaceNotifyEvent = procedure(Sender: IInterface) of object;
-  TNotifyMessageEvent = procedure(Sender : TObject; AMsg : string) of object;
+  TNotifyMessageEvent = procedure(Sender : TObject; const AMsg : string) of object;
 
   TEditAction  =  (eaAdd, eaEdit, eaDelete);
 

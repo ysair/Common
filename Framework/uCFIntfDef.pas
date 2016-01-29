@@ -241,6 +241,8 @@ type
     ['{FB886BA2-F480-473F-8C5B-75CA4C74E739}']
     procedure WriteLog(const ALog : string); overload;
     procedure WriteLog(const AType : TCFLogType; const ALog : string); overload;
+    procedure SetOnLog(AEvent : TNotifyMessageEvent);
+    function  GetOnLog : TNotifyMessageEvent;
   end;
 
   //×Ö·û´®²Ö¿â½Ó¿Ú

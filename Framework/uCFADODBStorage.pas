@@ -31,7 +31,7 @@ type
     function  Query(const ASQL : string; const AKeyField : string) : TClientDataSet; override;
     function  Update(const ADataSet : TClientDataSet):boolean; override;
     function  BaseQuery(const ASQL : string) : TDataSet; override;
-    procedure OnNotifyMessage(Msg: UINT; wParam: WPARAM; lParam: LPARAM);override;
+    procedure DoLoadConfig; override;
     procedure OnProviderUpdateError(Sender: TObject; DataSet: TCustomClientDataSet;
         E: EUpdateError; UpdateKind: TUpdateKind; var Response: TResolverResponse);
     procedure OnProviderBeforeUpdateRecord(Sender: TObject; SourceDS: TDataSet;
@@ -135,23 +135,33 @@ begin
   inherited;
 end;
 
+procedure TCFADODBStorage.DoLoadConfig;
+begin
+  inherited;
+  if Assigned(FConnection) and (CFGlobal.Config.DataBase.Connection_Timeout > 0) then
+    FConnection.ConnectionTimeout :=  CFGlobal.Config.DataBase.Connection_Timeout
+  else
+    FConnection.ConnectionTimeout :=  DB_Connection_Timeout;
+  if Assigned(FQuery) and (CFGlobal.Config.DataBase.Command_Timeout > 0) then
+    FQuery.CommandTimeout :=  CFGlobal.Config.DataBase.Command_Timeout
+  else
+    FQuery.CommandTimeout :=  DB_Command_Timeout;
+  if Assigned(FDataSet) and (CFGlobal.Config.DataBase.Command_Timeout > 0) then
+    FDataSet.CommandTimeout :=  CFGlobal.Config.DataBase.Command_Timeout
+  else
+    FDataSet.CommandTimeout :=  DB_Command_Timeout;
+end;
+
 function TCFADODBStorage.CreateDataSet: TADODataSet;
 begin
   Result := TADODataSet.Create(nil);
   Result.Connection :=  FConnection;
   Result.CacheSize  :=  DEF_CacheSize;
   Result.MarshalOptions :=  moMarshalModifiedOnly;
-end;
-
-procedure TCFADODBStorage.OnNotifyMessage(Msg: UINT; wParam: WPARAM;
-  lParam: LPARAM);
-begin
-  inherited;
-  case Msg of
-    CF_MSG_Config_Changed :
-      begin
-      end;
-  end;
+  if CFGlobal.Config.DataBase.Command_Timeout > 0 then
+    Result.CommandTimeout :=  CFGlobal.Config.DataBase.Command_Timeout
+  else
+    Result.CommandTimeout :=  DB_Command_Timeout;
 end;
 
 function TCFADODBStorage.OpenConnection: Boolean;

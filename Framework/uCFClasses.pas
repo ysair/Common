@@ -406,7 +406,14 @@ type
 
   //»’÷æ¿‡
   TCFLog = class abstract(TCFObject, ICFLog)
+  private
+    FOnLog: TNotifyMessageEvent;
+  protected
+    function GetOnLog: TNotifyMessageEvent;
+    procedure SetOnLog(AEvent: TNotifyMessageEvent);
   public
+    property OnLog : TNotifyMessageEvent read GetOnLog write SetOnLog;
+
     procedure WriteLog(const ALog : string); overload; virtual; abstract;
     procedure WriteLog(const AType : TCFLogType; const ALog : string); overload; virtual; abstract;
   end;
@@ -1794,6 +1801,18 @@ begin
 end;
 {$ENDIF}
 
+{ TCFLog }
+
+function TCFLog.GetOnLog: TNotifyMessageEvent;
+begin
+  Result  :=  FOnLog;
+end;
+
+procedure TCFLog.SetOnLog(AEvent: TNotifyMessageEvent);
+begin
+  FOnLog  :=  AEvent;
+end;
+
 { TCFTextFileLog }
 
 constructor TCFTextFileLog.Create;
@@ -1889,6 +1908,9 @@ end;
 
 procedure TCFTextFileLog.WriteLog(const ALog: string);
 begin
+  if Assigned(FOnLog) then
+    OnLog(Self, ALog);
+
   LockList;
   try
     FCacheList.Add(FormatDateTime('YYYY-MM-DD hh:nn:ss', Now) + ' ' + ALog);
