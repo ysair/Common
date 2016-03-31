@@ -63,6 +63,34 @@ type
     function PropertiesWriteToXMLFile(const AFileName : string; const ANodePath : string) : Boolean;
   end;
 
+  //JSON读接口
+  ICFPropertiesJSONReader = interface
+    ['{EDBB1E15-EE0C-47CB-84F0-D07FD0C39803}']
+    function PropertiesReadFromJSONObject(const AIntf : IInterface; const APath : string) : Boolean;
+  end;
+  ICFPropertiesJSONTextReader = interface
+    ['{6E0805DC-4A19-40CF-B7B3-A282BBA68BAE}']
+    function PropertiesReadFromJSON(const AJSON : string; const APath : string) : boolean;
+  end;
+  ICFPropertiesJSONFileReader = interface
+    ['{7C22767A-227E-4612-B8F4-6D6D6991E476}']
+    function PropertiesReadFromJSONFile(const AFileName : string; const APath : string) : Boolean;
+  end;
+
+  //JSON写接口
+  ICFPropertiesJSONWriter = interface
+    ['{8DDC3A54-2E96-4E4A-B106-BF933C1356E5}']
+    function PropertiesWriteToJSONObject(const AIntf : IInterface; const APath : string) : Boolean;
+  end;
+  ICFPropertiesJSONTextWriter = interface
+    ['{2EE1AFB3-20B1-4F14-9F91-E2CDF574A4EC}']
+    function PropertiesWriteToJSON(var AJSON : string; const APath : string) : Boolean;
+  end;
+  ICFPropertiesJSONFileWriter = interface
+    ['{CC2E6AAD-CCCC-487D-B5CB-98061B8A5205}']
+    function PropertiesWriteToJSONFile(const AFileName : string; const APath : string) : Boolean;
+  end;
+
   //文件存储接口
   ICFFileStorage = interface
     ['{4AE220F3-06BD-4937-B801-ED0D4D7AF308}']
