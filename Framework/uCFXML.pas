@@ -21,12 +21,12 @@ type
     class function  ForcePath(const ANode : IXMLNode; const ANodePath : string) : IXMLNode; static;
     class function  FindXMLNode(const ARoot : IXMLNode; const ANodePath : string) : IXMLNode; overload; static;
     class function  FindXMLNode(const ADoc : IXMLDocument; const ANodePath : string) : IXMLNode; overload; static;
-    class function  ReadPropertiesFromXMLNode(const AObj : TPersistent; const AIntf : IInterface; const ANodePath : string = '') : Boolean; static;
-    class function  ReadPropertiesFromXML(const AObj : TPersistent; const AXML : string; const ANodePath : string) : boolean; static;
-    class function  ReadPropertiesFromXMLFile(const AObj : TPersistent; const AFileName : string; const ANodePath : string) : Boolean; static;
-    class function  WritePropertiesToXMLNode(const AObj : TPersistent; const AIntf : IInterface; const ANodePath : string) : Boolean; static;
-    class function  WritePropertiesToXML(const AObj : TPersistent; const ANodePath : string; var AXML : string) : Boolean; static;
-    class function  WritePropertiesToXMLFile(const AObj : TPersistent; const ANodePath : string; const AFileName : string) : Boolean; static;
+    class function  ReadPropertiesFromXMLNode(const AObj : TObject; const AIntf : IInterface; const ANodePath : string = '') : Boolean; static;
+    class function  ReadPropertiesFromXML(const AObj : TObject; const AXML : string; const ANodePath : string) : boolean; static;
+    class function  ReadPropertiesFromXMLFile(const AObj : TObject; const AFileName : string; const ANodePath : string) : Boolean; static;
+    class function  WritePropertiesToXMLNode(const AObj : TObject; const AIntf : IInterface; const ANodePath : string) : Boolean; static;
+    class function  WritePropertiesToXML(const AObj : TObject; const ANodePath : string; var AXML : string) : Boolean; static;
+    class function  WritePropertiesToXMLFile(const AObj : TObject; const ANodePath : string; const AFileName : string) : Boolean; static;
   end;
 
   //从XML读取对象属性适配器
@@ -225,7 +225,7 @@ begin
   end;
 end;
 
-class function TCFXml.ReadPropertiesFromXMLNode(const AObj : TPersistent;
+class function TCFXml.ReadPropertiesFromXMLNode(const AObj : TObject;
     const AIntf : IInterface; const ANodePath : string) : Boolean;
 //从XMLNode读取对象属性
 //支持以下两种读法
@@ -282,7 +282,7 @@ begin
   Result  :=  True;
 end;
 
-class function TCFXml.ReadPropertiesFromXML(const AObj: TPersistent; const AXML,
+class function TCFXml.ReadPropertiesFromXML(const AObj: TObject; const AXML,
   ANodePath: string): boolean;
 //从XML文本读取对象属性
 begin
@@ -292,7 +292,7 @@ begin
       );
 end;
 
-class function TCFXml.ReadPropertiesFromXMLFile(const AObj: TPersistent;
+class function TCFXml.ReadPropertiesFromXMLFile(const AObj: TObject;
   const AFileName, ANodePath: string): Boolean;
 //从XML文件读取对象属性
 begin
@@ -302,7 +302,7 @@ begin
       );
 end;
 
-class function TCFXml.WritePropertiesToXMLNode(const AObj: TPersistent;
+class function TCFXml.WritePropertiesToXMLNode(const AObj: TObject;
   const AIntf: IInterface; const ANodePath : string): Boolean;
 //把对象属性写入XMLNode
 var
@@ -354,7 +354,7 @@ begin
   Result  :=  True;
 end;
 
-class function TCFXml.WritePropertiesToXML(const AObj: TPersistent;
+class function TCFXml.WritePropertiesToXML(const AObj: TObject;
     const ANodePath: string; var AXML : string): Boolean;
 //把对象属性写入XML文本
 var
@@ -377,7 +377,7 @@ begin
     Result  :=  False;
 end;
 
-class function TCFXml.WritePropertiesToXMLFile(const AObj: TPersistent;
+class function TCFXml.WritePropertiesToXMLFile(const AObj: TObject;
   const ANodePath, AFileName: string): Boolean;
 //把对象属性写入XML文档
 var
@@ -407,28 +407,19 @@ end;
 function TCFXml2PropertiesAdapter.PropertiesReadFromXMLNode(
   const AIntf: IInterface; const ANodePath : string): Boolean;
 begin
-  if Caller is TPersistent then
-    Result  :=  TCFXml.ReadPropertiesFromXMLNode(TPersistent(Caller), AIntf, ANodePath)
-  else
-    Result  :=  False;
+  Result  :=  TCFXml.ReadPropertiesFromXMLNode(Caller, AIntf, ANodePath);
 end;
 
 function TCFXml2PropertiesAdapter.PropertiesReadFromXML(const AXML,
   ANodePath: string): boolean;
 begin
-  if Caller is TPersistent then
-    Result  :=  TCFXml.ReadPropertiesFromXML(TPersistent(Caller), AXML, ANodePath)
-  else
-    Result  :=  False;
+  Result  :=  TCFXml.ReadPropertiesFromXML(Caller, AXML, ANodePath);
 end;
 
 function TCFXml2PropertiesAdapter.PropertiesReadFromXMLFile(const AFileName,
   ANodePath: string): Boolean;
 begin
-  if Caller is TPersistent then
-    Result  :=  TCFXml.ReadPropertiesFromXMLFile(TPersistent(Caller), AFileName, ANodePath)
-  else
-    Result  :=  False;
+  Result  :=  TCFXml.ReadPropertiesFromXMLFile(Caller, AFileName, ANodePath);
 end;
 
 { TCFProperties2XMLAdapter }
@@ -441,27 +432,18 @@ end;
 function TCFProperties2XMLAdapter.PropertiesWriteToXMLNode(const AIntf: IInterface;
   const ANodePath: string): Boolean;
 begin
-  if Caller is TPersistent then
-    Result  :=  TCFXml.WritePropertiesToXMLNode(TPersistent(Caller), AIntf, ANodePath)
-  else
-    Result  :=  False;
+  Result  :=  TCFXml.WritePropertiesToXMLNode(Caller, AIntf, ANodePath);
 end;
 
 function TCFProperties2XMLAdapter.PropertiesWriteToXML(var AXML : string; const ANodePath: string): Boolean;
 begin
-  if Caller is TPersistent then
-    Result  :=  TCFXml.WritePropertiesToXML(TPersistent(Caller), ANodePath,  AXML)
-  else
-    Result  :=  False;
+  Result  :=  TCFXml.WritePropertiesToXML(Caller, ANodePath,  AXML);
 end;
 
 function TCFProperties2XMLAdapter.PropertiesWriteToXMLFile(const AFileName,
   ANodePath: string): Boolean;
 begin
-  if Caller is TPersistent then
-    Result  :=  TCFXml.WritePropertiesToXMLFile(TPersistent(Caller), AFileName, ANodePath)
-  else
-    Result  :=  False;
+  Result  :=  TCFXml.WritePropertiesToXMLFile(Caller, AFileName, ANodePath);
 end;
 
 end.

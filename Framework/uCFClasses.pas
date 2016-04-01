@@ -8,7 +8,6 @@ interface
 uses
   SysUtils, Classes, Windows, Generics.Collections, ExtCtrls, Variants
   {$IFDEF FRAMEWORK_INCLUDE_DB} ,DB {$ENDIF}
-  {$IFDEF FRAMEWORK_INCLUDE_XML} ,XMLDoc, XMLIntf  {$ENDIF}
   ,uCFConsts, uCFIntfDef, uCFTypeDef, Messages, typinfo;
 
 type
@@ -231,13 +230,34 @@ type
   end;
 
   // 配置对象基类
-  TCFConfig = class(TCFPersistentObject, ICFPropertiesXMLReader, ICFPropertiesXMLWriter)
+  TCFConfig = class(TCFPersistentObject
+      {$IFDEF FRAMEWORK_INCLUDE_XML}
+      , ICFPropertiesXMLReader
+      , ICFPropertiesXMLWriter
+      {$ENDIF}
+      {$IFDEF FRAMEWORK_INCLUDE_JSON}
+      , ICFPropertiesJSONReader
+      , ICFPropertiesJSONWriter
+      {$ENDIF}
+      )
   private
+    {$IFDEF FRAMEWORK_INCLUDE_XML}
     FXMLReader: ICFPropertiesXMLReader;
     FXMLWriter: ICFPropertiesXMLWriter;
+    {$ENDIF}
+    {$IFDEF FRAMEWORK_INCLUDE_JSON}
+    FJSONReader : ICFPropertiesJSONReader;
+    FJSONWriter : ICFPropertiesJSONWriter;
+    {$ENDIF}
   protected
+    {$IFDEF FRAMEWORK_INCLUDE_XML}
     property XMLReader: ICFPropertiesXMLReader read FXMLReader implements ICFPropertiesXMLReader;
     property XMLWriter: ICFPropertiesXMLWriter read FXMLWriter implements ICFPropertiesXMLWriter;
+    {$ENDIF}
+    {$IFDEF FRAMEWORK_INCLUDE_JSON}
+    property JSONReader: ICFPropertiesJSONReader read FJSONReader implements ICFPropertiesJSONReader;
+    property JSONWriter: ICFPropertiesJSONWriter read FJSONWriter implements ICFPropertiesJSONWriter;
+    {$ENDIF}
   public
     constructor Create; override;
   end;
@@ -378,7 +398,14 @@ type
   end;
 
   // 对象列表类,支持从DataSet生成列表
-  TCFObjectList<T : class> = class abstract(TObjectList<T>, ICFInterface{$IFDEF FRAMEWORK_INCLUDE_DB}, ICFPropertiesDataSetReader{$ENDIF}{$IFDEF FRAMEWORK_INCLUDE_XML}, ICFPropertiesXMLReader{$ENDIF})
+  TCFObjectList<T : class> = class abstract(TObjectList<T>, ICFInterface
+      {$IFDEF FRAMEWORK_INCLUDE_DB}
+      , ICFPropertiesDataSetReader
+      {$ENDIF}
+      {$IFDEF FRAMEWORK_INCLUDE_XML}
+      , ICFPropertiesXMLReader
+      {$ENDIF}
+      )
   protected
     FRefCount: Integer;
     FDestroying: Boolean;
@@ -481,7 +508,14 @@ type
 implementation
 
 uses
-  Consts, uCFXML, uCFResource, fcConvert, fcPlus_VCL, fcWindows, fcRtti, uCFGlobal;
+  Consts, uCFResource, fcConvert, fcPlus_VCL, fcWindows, fcRtti, uCFGlobal
+  {$IFDEF FRAMEWORK_INCLUDE_XML}
+  , uCFXML, XMLDoc, XMLIntf
+  {$ENDIF}
+  {$IFDEF FRAMEWORK_INCLUDE_JSON}
+  , uCFJSON
+  {$ENDIF}
+  ;
 
 { TDNObject }
 
@@ -902,8 +936,14 @@ end;
 constructor TCFConfig.Create;
 begin
   inherited;
+  {$IFDEF FRAMEWORK_INCLUDE_XML}
   FXMLReader := TCFXml2PropertiesAdapter.Create(Self);
   FXMLWriter := TCFProperties2XMLAdapter.Create(Self);
+  {$ENDIF}
+  {$IFDEF FRAMEWORK_INCLUDE_JSON}
+  FJSONReader := TCFJSON2PropertiesAdapter.Create(Self);
+  FJSONWriter := TCFProperties2JSONAdapter.Create(Self);
+  {$ENDIF}
 end;
 
 { TCFCritical }

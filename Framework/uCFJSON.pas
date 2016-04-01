@@ -13,12 +13,12 @@ type
   //XML解析类
   TCFJSON = class(TCFObject)
   public
-    class function  ReadPropertiesFromJSONObject(const AObj : TPersistent; const AIntf : IInterface; const APath : string = '') : Boolean; static;
-    class function  ReadPropertiesFromJSON(const AObj : TPersistent; const AJSON : string; const APath : string) : boolean; static;
-    class function  ReadPropertiesFromJSONFile(const AObj : TPersistent; const AFileName : string; const APath : string) : Boolean; static;
-    class function  WritePropertiesToJSONObject(const AObj : TPersistent; const AIntf : IInterface; const APath : string) : Boolean; static;
-    class function  WritePropertiesToJSON(const AObj : TPersistent; const APath : string; var AJSON : string) : Boolean; static;
-    class function  WritePropertiesToJSONFile(const AObj : TPersistent; const APath : string; const AFileName : string) : Boolean; static;
+    class function  ReadPropertiesFromJSONObject(const AObj : TObject; const AIntf : IInterface; const APath : string = '') : Boolean; static;
+    class function  ReadPropertiesFromJSON(const AObj : TObject; const AJSON : string; const APath : string) : boolean; static;
+    class function  ReadPropertiesFromJSONFile(const AObj : TObject; const AFileName : string; const APath : string) : Boolean; static;
+    class function  WritePropertiesToJSONObject(const AObj : TObject; const AIntf : IInterface; const APath : string) : Boolean; static;
+    class function  WritePropertiesToJSON(const AObj : TObject; const APath : string; var AJSON : string) : Boolean; static;
+    class function  WritePropertiesToJSONFile(const AObj : TObject; const APath : string; const AFileName : string) : Boolean; static;
   end;
 
   //从JSON读取对象属性适配器
@@ -46,7 +46,7 @@ uses
 
 { TCFJSON }
 
-class function TCFJSON.ReadPropertiesFromJSONObject(const AObj: TPersistent; const AIntf: IInterface;
+class function TCFJSON.ReadPropertiesFromJSONObject(const AObj: TObject; const AIntf: IInterface;
   const APath: string): Boolean;
 var
   iso : ISuperObject;
@@ -73,8 +73,6 @@ begin
     try
       for i := 0 to plen - 1 do
       begin
-        if not Assigned(plist[i].SetProc) then Continue;
-
         sname :=  string(plist[i].Name);
         ip  :=  iso.O[sname];
         if not Assigned(ip) then
@@ -83,15 +81,23 @@ begin
         try
           case plist[i].PropType^.Kind of
             tkString, tkLString, tkWString, tkUString :
-              SetStrProp(AObj, plist[i], ip.AsString);
+              if Assigned(plist[i].SetProc) then
+                SetStrProp(AObj, plist[i], ip.AsString);
             tkInteger :
-              SetOrdProp(AObj, plist[i], ip.AsInteger);
+              if Assigned(plist[i].SetProc) then
+                SetOrdProp(AObj, plist[i], ip.AsInteger);
             tkInt64 :
-              SetInt64Prop(AObj, plist[i], ip.AsInteger);
+              if Assigned(plist[i].SetProc) then
+                SetInt64Prop(AObj, plist[i], ip.AsInteger);
             tkEnumeration :
-              SetEnumProp(AObj, plist[i], ip.AsString);
+              if Assigned(plist[i].SetProc) then
+                SetEnumProp(AObj, plist[i], ip.AsString);
             tkFloat :
-              SetFloatProp(AObj, plist[i], ip.AsDouble);
+              if Assigned(plist[i].SetProc) then
+                SetFloatProp(AObj, plist[i], ip.AsDouble);
+            tkClass :
+              if Assigned(GetObjectProp(AObj, plist[i])) then
+                ReadPropertiesFromJSONObject(GetObjectProp(AObj, plist[i]), ip, '');
           end;//}
         except
         end;
@@ -104,7 +110,7 @@ begin
   end;
 end;
 
-class function TCFJSON.ReadPropertiesFromJSON(const AObj: TPersistent; const AJSON, APath: string): boolean;
+class function TCFJSON.ReadPropertiesFromJSON(const AObj: TObject; const AJSON, APath: string): boolean;
 var
   iso : ISuperObject;
 begin
@@ -116,7 +122,7 @@ begin
   end;
 end;
 
-class function TCFJSON.ReadPropertiesFromJSONFile(const AObj: TPersistent; const AFileName, APath: string): Boolean;
+class function TCFJSON.ReadPropertiesFromJSONFile(const AObj: TObject; const AFileName, APath: string): Boolean;
 var
   iso : ISuperObject;
 begin
@@ -128,7 +134,7 @@ begin
   end;
 end;
 
-class function TCFJSON.WritePropertiesToJSONObject(const AObj: TPersistent; const AIntf: IInterface;
+class function TCFJSON.WritePropertiesToJSONObject(const AObj: TObject; const AIntf: IInterface;
   const APath: string): Boolean;
 var
   iso : ISuperObject;
@@ -166,6 +172,9 @@ begin
           iobj.D[sname] :=  GetFloatProp(AObj, plist[i]);
         tkInt64 :
           iobj.I[sname] :=  GetInt64Prop(AObj, plist[i]);
+        tkClass :
+          if Assigned(GetObjectProp(AObj, plist[i])) then
+            WritePropertiesToJSONObject(GetObjectProp(AObj, plist[i]), iobj, sname);
       end;//}
     end;
     if APath <> '' then
@@ -176,7 +185,7 @@ begin
   Result  :=  True;
 end;
 
-class function TCFJSON.WritePropertiesToJSON(const AObj: TPersistent; const APath: string; var AJSON: string): Boolean;
+class function TCFJSON.WritePropertiesToJSON(const AObj: TObject; const APath: string; var AJSON: string): Boolean;
 var
   iso : ISuperObject;
 begin
@@ -186,7 +195,7 @@ begin
     AJSON :=  iso.AsJSon();
 end;
 
-class function TCFJSON.WritePropertiesToJSONFile(const AObj: TPersistent; const APath, AFileName: string): Boolean;
+class function TCFJSON.WritePropertiesToJSONFile(const AObj: TObject; const APath, AFileName: string): Boolean;
 var
   iso : ISuperObject;
 begin
@@ -209,26 +218,17 @@ end;
 
 function TCFJSON2PropertiesAdapter.PropertiesReadFromJSON(const AJSON, APath: string): boolean;
 begin
-  if Caller is TPersistent then
-    Result  :=  TCFJSON.ReadPropertiesFromJSON(TPersistent(Caller), AJSON, APath)
-  else
-    Result  :=  False;
+  Result  :=  TCFJSON.ReadPropertiesFromJSON(Caller, AJSON, APath);
 end;
 
 function TCFJSON2PropertiesAdapter.PropertiesReadFromJSONFile(const AFileName, APath: string): Boolean;
 begin
-  if Caller is TPersistent then
-    Result  :=  TCFJSON.ReadPropertiesFromJSONFile(TPersistent(Caller), AFileName, APath)
-  else
-    Result  :=  False;
+  Result  :=  TCFJSON.ReadPropertiesFromJSONFile(Caller, AFileName, APath);
 end;
 
 function TCFJSON2PropertiesAdapter.PropertiesReadFromJSONObject(const AIntf: IInterface; const APath: string): Boolean;
 begin
-  if Caller is TPersistent then
-    Result  :=  TCFJSON.ReadPropertiesFromJSONObject(TPersistent(Caller), AIntf, APath)
-  else
-    Result  :=  False;
+  Result  :=  TCFJSON.ReadPropertiesFromJSONObject(Caller, AIntf, APath);
 end;
 
 { TCFProperties2JSONAdapter }
@@ -240,26 +240,17 @@ end;
 
 function TCFProperties2JSONAdapter.PropertiesWriteToJSON(var AJSON: string; const APath: string): Boolean;
 begin
-  if Caller is TPersistent then
-    Result  :=  TCFJSON.WritePropertiesToJSON(TPersistent(Caller), APath, AJSON)
-  else
-    Result  :=  False;
+  Result  :=  TCFJSON.WritePropertiesToJSON(Caller, APath, AJSON);
 end;
 
 function TCFProperties2JSONAdapter.PropertiesWriteToJSONFile(const AFileName, APath: string): Boolean;
 begin
-  if Caller is TPersistent then
-    Result  :=  TCFJSON.WritePropertiesToJSONFile(TPersistent(Caller), APath, AFileName)
-  else
-    Result  :=  False;
+  Result  :=  TCFJSON.WritePropertiesToJSONFile(Caller, APath, AFileName);
 end;
 
 function TCFProperties2JSONAdapter.PropertiesWriteToJSONObject(const AIntf: IInterface; const APath: string): Boolean;
 begin
-  if Caller is TPersistent then
-    Result  :=  TCFJSON.WritePropertiesToJSONObject(TPersistent(Caller), AIntf, APath)
-  else
-    Result  :=  False;
+  Result  :=  TCFJSON.WritePropertiesToJSONObject(Caller, AIntf, APath);
 end;
 
 end.
