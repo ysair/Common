@@ -238,6 +238,8 @@ type
       {$IFDEF FRAMEWORK_INCLUDE_JSON}
       , ICFPropertiesJSONReader
       , ICFPropertiesJSONWriter
+      , ICFPropertiesJSONTextReader
+      , ICFPropertiesJSONTextWriter
       {$ENDIF}
       )
   private
@@ -248,6 +250,8 @@ type
     {$IFDEF FRAMEWORK_INCLUDE_JSON}
     FJSONReader : ICFPropertiesJSONReader;
     FJSONWriter : ICFPropertiesJSONWriter;
+    FJSONTextReader : ICFPropertiesJSONTextReader;
+    FJSONTextWriter : ICFPropertiesJSONTextWriter;
     {$ENDIF}
   protected
     {$IFDEF FRAMEWORK_INCLUDE_XML}
@@ -257,6 +261,8 @@ type
     {$IFDEF FRAMEWORK_INCLUDE_JSON}
     property JSONReader: ICFPropertiesJSONReader read FJSONReader implements ICFPropertiesJSONReader;
     property JSONWriter: ICFPropertiesJSONWriter read FJSONWriter implements ICFPropertiesJSONWriter;
+    property JSONTextReader: ICFPropertiesJSONTextReader read FJSONTextReader implements ICFPropertiesJSONTextReader;
+    property JSONTextWriter: ICFPropertiesJSONTextWriter read FJSONTextWriter implements ICFPropertiesJSONTextWriter;
     {$ENDIF}
   public
     constructor Create; override;
@@ -934,6 +940,8 @@ end;
 { TCFConfig }
 
 constructor TCFConfig.Create;
+var
+  intf : IInterface;
 begin
   inherited;
   {$IFDEF FRAMEWORK_INCLUDE_XML}
@@ -941,8 +949,12 @@ begin
   FXMLWriter := TCFProperties2XMLAdapter.Create(Self);
   {$ENDIF}
   {$IFDEF FRAMEWORK_INCLUDE_JSON}
-  FJSONReader := TCFJSON2PropertiesAdapter.Create(Self);
-  FJSONWriter := TCFProperties2JSONAdapter.Create(Self);
+  intf  :=  TCFJSON2PropertiesAdapter.Create(Self);
+  FJSONReader := intf as ICFPropertiesJSONReader;
+  FJSONTextReader :=  intf as ICFPropertiesJSONTextReader;
+  intf  :=  TCFProperties2JSONAdapter.Create(Self);
+  FJSONWriter := intf as ICFPropertiesJSONWriter;
+  FJSONTextWriter :=  intf as ICFPropertiesJSONTextWriter;
   {$ENDIF}
 end;
 
