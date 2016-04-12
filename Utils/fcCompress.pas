@@ -250,7 +250,7 @@ begin
   try
     fsOut :=  TFileStream.Create(AOutFileName, fmCreate);
     try
-      CompressionStream(fsIn, fsOut);
+      CompressionStream(fsIn, fsOut, ACompressionLevel);
     finally
       fsOut.Free;
     end;
