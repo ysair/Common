@@ -6,11 +6,11 @@ unit uCFJSON;
 interface
 
 uses
-  SysUtils, Classes, typinfo, Variants, StrUtils,
+  SysUtils, Classes, typinfo, Variants, StrUtils, Rtti,
   uCFIntfDef, uCFClasses;
 
 type
-  //XML解析类
+  //JSON解析类
   TCFJSON = class(TCFObject)
   public
     class function  ReadPropertiesFromJSONObject(const AObj : TObject; const AIntf : IInterface; const APath : string = '') : Boolean; static;
@@ -44,67 +44,40 @@ implementation
 uses
   superobject;
 
+type
+  TSuperRttiContextEx = class(TSuperRttiContext)
+  private
+    class function GetFieldName(r: TRttiNamedObject): string;
+    class function GetFieldDefault(r: TRttiNamedObject; const obj: ISuperObject): ISuperObject;
+  public
+    function FromJson(TypeInfo: PTypeInfo; const obj: ISuperObject; var Value: TValue): Boolean; override;
+    function ToJson(var value: TValue; const index: ISuperObject): ISuperObject; override;
+  end;
+
 { TCFJSON }
 
 class function TCFJSON.ReadPropertiesFromJSONObject(const AObj: TObject; const AIntf: IInterface;
   const APath: string): Boolean;
 var
   iso : ISuperObject;
-  plist : PPropList;
-  plen : Integer;
-  ip : ISuperObject;
-  i : Integer;
-  sname : string;
+  ctx : TSuperRttiContextEx;
+  v: TValue;
 begin
   Result  :=  False;
   if not Assigned(AObj) then Exit;
   if not Assigned(AIntf) then Exit;
   if AIntf.QueryInterface(ISuperObject, iso) <> S_OK then Exit;
   try
-    if APath <> '' then
-    begin
-      iso :=  iso[APath];
-      if not Assigned(iso) then Exit;
-    end;
-    if not iso.IsType(stObject) then Exit;
-
-    plen  :=  GetPropList(AObj, plist);
-    if plen > 0 then
+    ctx := TSuperRttiContextEx.Create;
     try
-      for i := 0 to plen - 1 do
-      begin
-        sname :=  string(plist[i].Name);
-        ip  :=  iso.O[sname];
-        if not Assigned(ip) then
-          Continue;
-
-        try
-          case plist[i].PropType^.Kind of
-            tkString, tkLString, tkWString, tkUString :
-              if Assigned(plist[i].SetProc) then
-                SetStrProp(AObj, plist[i], ip.AsString);
-            tkInteger :
-              if Assigned(plist[i].SetProc) then
-                SetOrdProp(AObj, plist[i], ip.AsInteger);
-            tkInt64 :
-              if Assigned(plist[i].SetProc) then
-                SetInt64Prop(AObj, plist[i], ip.AsInteger);
-            tkEnumeration :
-              if Assigned(plist[i].SetProc) then
-                SetEnumProp(AObj, plist[i], ip.AsString);
-            tkFloat :
-              if Assigned(plist[i].SetProc) then
-                SetFloatProp(AObj, plist[i], ip.AsDouble);
-            tkClass :
-              if Assigned(GetObjectProp(AObj, plist[i])) then
-                ReadPropertiesFromJSONObject(GetObjectProp(AObj, plist[i]), ip, '');
-          end;//}
-        except
-        end;
-      end;
+      v := AObj;
+      if APath <> '' then
+        iso :=  iso[APath];
+      Result  :=  ctx.FromJson(v.TypeInfo, iso, v);
     finally
-      FreeMem(plist, plen * SizeOf(Pointer));
+      ctx.Free;
     end;
+
     Result  :=  True;
   except on E: Exception do
   end;
@@ -139,50 +112,31 @@ class function TCFJSON.WritePropertiesToJSONObject(const AObj: TObject; const AI
 var
   iso : ISuperObject;
   iobj : ISuperObject;
-  plist : PPropList;
-  plen : Integer;
-  i : Integer;
-  sname : string;
+  v: TValue;
+  ctx: TSuperRttiContext;
 begin
   Result  :=  False;
   if not Assigned(AIntf) then Exit;
   if not Assigned(AObj) then Exit;
   if AIntf.QueryInterface(ISuperObject, iso) <> S_OK then Exit;
-  if APath = '' then
-    iobj  :=  iso
-  else
-    iobj  :=  TSuperObject.Create();
 
-  plen  :=  GetPropList(AObj, plist);
-  if plen > 0 then
+  ctx := TSuperRttiContextEx.Create;
   try
-    for i := 0 to plen - 1 do
-    begin
-      if not Assigned(plist[i].GetProc) then Continue;
-
-      sname :=  string(plist[i].Name);
-      case plist[i].PropType^.Kind of
-        tkString, tkLString, tkWString, tkUString :
-          iobj.S[sname] :=  GetStrProp(AObj, plist[i]);
-        tkInteger :
-          iobj.I[sname] :=  GetOrdProp(AObj, plist[i]);
-        tkEnumeration :
-          iobj.S[sname] :=  GetEnumProp(AObj, plist[i]);
-        tkFloat :
-          iobj.D[sname] :=  GetFloatProp(AObj, plist[i]);
-        tkInt64 :
-          iobj.I[sname] :=  GetInt64Prop(AObj, plist[i]);
-        tkClass :
-          if Assigned(GetObjectProp(AObj, plist[i])) then
-            WritePropertiesToJSONObject(GetObjectProp(AObj, plist[i]), iobj, sname);
-      end;//}
+    v := AObj;
+    try
+      iobj  :=  ctx.ToJson(v, SO);
+      if APath <> '' then
+        iso[APath]  :=  iobj
+      else begin
+        iso.Clear(true);
+        iso.Merge(iobj, True);
+      end;
+      Exit(True);
+    except
     end;
-    if APath <> '' then
-      iso[APath]  :=  iobj;
   finally
-    FreeMem(plist, plen * SizeOf(Pointer));
+    ctx.Free;
   end;
-  Result  :=  True;
 end;
 
 class function TCFJSON.WritePropertiesToJSON(const AObj: TObject; const APath: string; var AJSON: string): Boolean;
@@ -251,6 +205,120 @@ end;
 function TCFProperties2JSONAdapter.PropertiesWriteToJSONObject(const AIntf: IInterface; const APath: string): Boolean;
 begin
   Result  :=  TCFJSON.WritePropertiesToJSONObject(Caller, AIntf, APath);
+end;
+
+{ TSuperRttiContextEx }
+
+class function TSuperRttiContextEx.GetFieldName(r: TRttiNamedObject): string;
+var
+  o: TCustomAttribute;
+begin
+  for o in r.GetAttributes do
+    if o is SOName then
+      Exit(SOName(o).Name);
+  Result := r.Name;
+end;
+
+class function TSuperRttiContextEx.GetFieldDefault(r: TRttiNamedObject; const obj: ISuperObject): ISuperObject;
+var
+  o: TCustomAttribute;
+begin
+  if not ObjectIsType(obj, stNull) then Exit(obj);
+  for o in r.GetAttributes do
+    if o is SODefault then
+      Exit(SO(SODefault(o).Name));
+  Result := obj;
+end;
+
+function TSuperRttiContextEx.FromJson(TypeInfo: PTypeInfo; const obj: ISuperObject; var Value: TValue): Boolean;
+
+  procedure FromClass;
+  var
+    p: TRttiProperty;
+    v: TValue;
+    n : string;
+  begin
+    case ObjectGetType(obj) of
+      stObject:
+        begin
+          Result := True;
+          if Value.Kind <> tkClass then
+            Value := GetTypeData(TypeInfo).ClassType.Create;
+          for p in Context.GetType(Value.AsObject.ClassType).GetProperties do
+            if p.PropertyType <> nil then
+            begin
+              v := p.GetValue(Value.AsObject);
+              n :=  GetFieldName(p);
+              //只写published属性
+              if not Assigned(GetPropInfo(Value.AsObject, n)) then
+                Continue;
+              Result := FromJson(p.PropertyType.Handle, GetFieldDefault(p, obj.AsObject[n]), v);
+              if Result then
+              begin
+                if p.IsWritable then
+                  p.SetValue(Value.AsObject, v);
+              end;
+            end;
+        end;
+      stNull:
+        begin
+          Value := nil;
+          Result := True;
+        end
+    else
+      // error
+      Value := nil;
+      Result := False;
+    end;
+  end;
+
+begin
+  if TypeInfo <> nil then
+  begin
+    if TypeInfo.Kind = tkClass then
+      FromClass
+    else
+      Result  :=  inherited FromJson(TypeInfo, obj, Value);
+  end else
+    Result := False;
+end;
+
+function TSuperRttiContextEx.ToJson(var value: TValue; const index: ISuperObject): ISuperObject;
+
+  procedure ToClass;
+  var
+    o: ISuperObject;
+    p: TRttiProperty;
+    v: TValue;
+    n : string;
+  begin
+    if TValueData(Value).FAsObject <> nil then
+    begin
+      o := index[IntToStr(NativeInt(Value.AsObject))];
+      if o = nil then
+      begin
+        Result := TSuperObject.Create(stObject);
+        index[IntToStr(NativeInt(Value.AsObject))] := Result;
+        for p in Context.GetType(Value.AsObject.ClassType).GetProperties do
+          if p.PropertyType <> nil then
+          begin
+            v := p.GetValue(Value.AsObject);
+            n :=  GetFieldName(p);
+            //只写published属性
+            if Assigned(GetPropInfo(Value.AsObject, n)) then
+              Result.AsObject[n] := ToJson(v, index);
+          end;
+      end else
+        Result := o;
+    end else
+      Result := nil;
+  end;
+
+begin
+  if Value.Kind = tkClass then
+    ToClass
+  else
+    Result  :=  inherited ToJson(Value, Index);
 end;
 
 end.
