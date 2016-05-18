@@ -7,12 +7,16 @@ interface
 
 uses
   SysUtils, Classes, typinfo, Variants, StrUtils, Rtti,
+  superobject, superdate,
   uCFIntfDef, uCFClasses;
 
 type
+  TCFJsonDateFormat = (jdfJava, jdfISO8601);
+
   //JSONΩ‚Œˆ¿‡
   TCFJSON = class(TCFObject)
   public
+    class procedure SetDateFormat(const ADateFormat : TCFJsonDateFormat);
     class function  ReadPropertiesFromJSONObject(const AObj : TObject; const AIntf : IInterface; const APath : string = '') : Boolean; static;
     class function  ReadPropertiesFromJSON(const AObj : TObject; const AJSON : string; const APath : string) : boolean; static;
     class function  ReadPropertiesFromJSONFile(const AObj : TObject; const AFileName : string; const APath : string) : Boolean; static;
@@ -39,10 +43,9 @@ type
     function  PropertiesWriteToJSONFile(const AFileName : string; const APath : string) : Boolean;
   end;//}
 
-implementation
+function GetSuperRttiContext : TSuperRttiContext;
 
-uses
-  superobject;
+implementation
 
 type
   TSuperRttiContextEx = class(TSuperRttiContext)
@@ -50,17 +53,46 @@ type
     class function GetFieldName(r: TRttiNamedObject): string;
     class function GetFieldDefault(r: TRttiNamedObject; const obj: ISuperObject): ISuperObject;
   public
+    constructor Create; override;
+
     function FromJson(TypeInfo: PTypeInfo; const obj: ISuperObject; var Value: TValue): Boolean; override;
     function ToJson(var value: TValue; const index: ISuperObject): ISuperObject; override;
   end;
 
+var
+  G_Context : TSuperRttiContext;
+
+function GetSuperRttiContext : TSuperRttiContext;
+begin
+  if not Assigned(G_Context) then
+    G_Context :=  TSuperRttiContextEx.Create;
+  Result  :=  G_Context;
+end;
+
+function serialtodatetime_ISO8601(ctx: TSuperRttiContext; var value: TValue; const index: ISuperObject): ISuperObject;
+begin
+  Result := TSuperObject.Create(DelphiDateTimeToISO8601Date(TValueData(value).FAsDouble));
+end;
+
+function serialtodatetime_Java(ctx: TSuperRttiContext; var value: TValue; const index: ISuperObject): ISuperObject;
+begin
+  Result := TSuperObject.Create(DelphiToJavaDateTime(TValueData(value).FAsDouble));
+end;
+
 { TCFJSON }
+
+class procedure TCFJSON.SetDateFormat(const ADateFormat: TCFJsonDateFormat);
+begin
+  case ADateFormat of
+    jdfISO8601  : GetSuperRttiContext.SerialToJson.AddOrSetValue(TypeInfo(TDateTime), serialtodatetime_ISO8601);
+    jdfJava : GetSuperRttiContext.SerialToJson.AddOrSetValue(TypeInfo(TDateTime), serialtodatetime_Java);
+  end;
+end;
 
 class function TCFJSON.ReadPropertiesFromJSONObject(const AObj: TObject; const AIntf: IInterface;
   const APath: string): Boolean;
 var
   iso : ISuperObject;
-  ctx : TSuperRttiContextEx;
   v: TValue;
 begin
   Result  :=  False;
@@ -68,17 +100,10 @@ begin
   if not Assigned(AIntf) then Exit;
   if AIntf.QueryInterface(ISuperObject, iso) <> S_OK then Exit;
   try
-    ctx := TSuperRttiContextEx.Create;
-    try
-      v := AObj;
-      if APath <> '' then
-        iso :=  iso[APath];
-      Result  :=  ctx.FromJson(v.TypeInfo, iso, v);
-    finally
-      ctx.Free;
-    end;
-
-    Result  :=  True;
+    v := AObj;
+    if APath <> '' then
+      iso :=  iso[APath];
+    Result  :=  GetSuperRttiContext.FromJson(v.TypeInfo, iso, v);
   except on E: Exception do
   end;
 end;
@@ -113,29 +138,23 @@ var
   iso : ISuperObject;
   iobj : ISuperObject;
   v: TValue;
-  ctx: TSuperRttiContext;
 begin
   Result  :=  False;
   if not Assigned(AIntf) then Exit;
   if not Assigned(AObj) then Exit;
   if AIntf.QueryInterface(ISuperObject, iso) <> S_OK then Exit;
 
-  ctx := TSuperRttiContextEx.Create;
+  v := AObj;
   try
-    v := AObj;
-    try
-      iobj  :=  ctx.ToJson(v, SO);
-      if APath <> '' then
-        iso[APath]  :=  iobj
-      else begin
-        iso.Clear(true);
-        iso.Merge(iobj, True);
-      end;
-      Exit(True);
-    except
+    iobj  :=  GetSuperRttiContext.ToJson(v, SO);
+    if APath <> '' then
+      iso[APath]  :=  iobj
+    else begin
+      iso.Clear(true);
+      iso.Merge(iobj, True);
     end;
-  finally
-    ctx.Free;
+    Exit(True);
+  except
   end;
 end;
 
@@ -208,6 +227,13 @@ begin
 end;
 
 { TSuperRttiContextEx }
+
+constructor TSuperRttiContextEx.Create;
+begin
+  inherited;
+  //SerialFromJson.AddOrSetValue(TypeInfo(TDateTime), serialfromdatetime);
+  SerialToJson.AddOrSetValue(TypeInfo(TDateTime), serialtodatetime_ISO8601);
+end;
 
 class function TSuperRttiContextEx.GetFieldName(r: TRttiNamedObject): string;
 var
@@ -320,5 +346,9 @@ begin
   else
     Result  :=  inherited ToJson(Value, Index);
 end;
+
+initialization
+finalization
+  FreeAndNil(G_Context);
 
 end.
