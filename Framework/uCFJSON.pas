@@ -15,7 +15,11 @@ type
 
   //JSONΩ‚Œˆ¿‡
   TCFJSON = class(TCFObject)
+  private
+    class var FContext : TSuperRttiContext;
   public
+    class destructor Destroy;
+    class function GetSuperRttiContext : TSuperRttiContext;
     class procedure SetDateFormat(const ADateFormat : TCFJsonDateFormat);
     class function  ReadPropertiesFromJSONObject(const AObj : TObject; const AIntf : IInterface; const APath : string = '') : Boolean; static;
     class function  ReadPropertiesFromJSON(const AObj : TObject; const AJSON : string; const APath : string) : boolean; static;
@@ -43,8 +47,6 @@ type
     function  PropertiesWriteToJSONFile(const AFileName : string; const APath : string) : Boolean;
   end;//}
 
-function GetSuperRttiContext : TSuperRttiContext;
-
 implementation
 
 type
@@ -59,16 +61,6 @@ type
     function ToJson(var value: TValue; const index: ISuperObject): ISuperObject; override;
   end;
 
-var
-  G_Context : TSuperRttiContext;
-
-function GetSuperRttiContext : TSuperRttiContext;
-begin
-  if not Assigned(G_Context) then
-    G_Context :=  TSuperRttiContextEx.Create;
-  Result  :=  G_Context;
-end;
-
 function serialtodatetime_ISO8601(ctx: TSuperRttiContext; var value: TValue; const index: ISuperObject): ISuperObject;
 begin
   Result := TSuperObject.Create(DelphiDateTimeToISO8601Date(TValueData(value).FAsDouble));
@@ -80,6 +72,18 @@ begin
 end;
 
 { TCFJSON }
+
+class destructor TCFJSON.Destroy;
+begin
+  FreeAndNil(FContext);
+end;
+
+class function TCFJSON.GetSuperRttiContext: TSuperRttiContext;
+begin
+  if not Assigned(FContext) then
+    FContext :=  TSuperRttiContextEx.Create;
+  Result  :=  FContext;
+end;
 
 class procedure TCFJSON.SetDateFormat(const ADateFormat: TCFJsonDateFormat);
 begin
@@ -346,9 +350,5 @@ begin
   else
     Result  :=  inherited ToJson(Value, Index);
 end;
-
-initialization
-finalization
-  FreeAndNil(G_Context);
 
 end.
