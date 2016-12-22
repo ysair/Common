@@ -7,6 +7,9 @@ uses
   Forms, TLHelp32, Messages;
 
 type
+  {
+    GetVersionEx 函数已经废弃，即使win10，也只能获得6.2
+  }
   // Windows functions
   TSystemFolderType = (spAppData, spStartUp, spDesktop, spSendTo, spPrograms, spStartMenu,
     spQuickLanuch, spSystem32, spMyDocument, spProgramFiles, spSkin, spDmResource);
@@ -14,7 +17,7 @@ type
   Win = record
   type
     TWinVersion = (wvUnknown, wvWin95, wvWin98, wvWin98SE, wvWinNT, wvWinME, wvWin2000, wvWinXP,
-      wvVista, wvWin7, wvWin8, wvWin10, wvWin10Later);
+      wvVista, wvWin7, wvWin8OrLater);
 
     class function GetInstanceFileName: string; static;
     class function GetInstancePath: string; static;
@@ -44,6 +47,7 @@ type
 
     /// <summary>
     /// 获取指定目录下的临时文件路径
+    ///
     /// </summary>
     /// <param name="ADir">指定目录</param>
     /// <returns>string：临时文件路径</returns>
@@ -80,7 +84,7 @@ type
     class function IsWindow(const AHandle: HWND): Boolean; static;
     class function GetWinVersion: TWinVersion; static;
     class function GetWinVerIsVistaOrLater: Boolean; static;
-    class function GetWinVerIsWin10OrLater: Boolean; static;
+    class function GetWinVerIsWin8OrLater: Boolean; static;
 
     class function GetUserIdleTime: DWORD; static;
     class function GetExeNameByProcessID(PID: DWORD): String; static;
@@ -212,6 +216,15 @@ type
   {屏幕相关的}
   Scrn = class
     class function DPIRatio: Single; static;    //DPI
+
+    {把一个数字转为当前dpi显示的大小
+     例如：
+      如果当前dpi是96， 按1:1返回
+      如果当前dpi是150%（96*150%=144），则返回1:1.5
+      200%放大显示时，返回2倍
+     注意：使用这个函数的基准是按96dpi计算的
+    }
+    class function ToCurrDpi(AInSize: Integer): Integer; static;
   end;
 
 implementation
@@ -645,14 +658,17 @@ begin
     and (osVerInfo.dwMajorVersion>=6);
 end;
 
-class function Win.GetWinVerIsWin10OrLater: Boolean;
+class function Win.GetWinVerIsWin8OrLater: Boolean;
 var
   osVerInfo: TOSVersionInfo;
 begin
   osVerInfo.dwOSVersionInfoSize := SizeOf(TOSVersionInfo);
   Result := GetVersionEx(osVerInfo)
     and (osVerInfo.dwPlatformId=VER_PLATFORM_WIN32_NT)
-    and (osVerInfo.dwMajorVersion>=10);
+    and (
+         ( (osVerInfo.dwMajorVersion=6) and (osVerInfo.dwMinorVersion>1))
+         or (osVerInfo.dwMajorVersion>6)
+        ) ;
 end;
 
 class function Win.GetWinVersion: TWinVersion;
@@ -679,12 +695,8 @@ begin
             Result := wvVista
           else if (majorVersion = 6) and (minorVersion = 1) then
             Result := wvWin7
-          else if (majorVersion = 6) and (minorVersion > 1) then
-            Result := wvWin8
-          else if (majorVersion =10) and (minorVersion = 0) then
-            Result := wvWin10
-          else if majorVersion >=10 then
-            Result := wvWin10Later;
+          else if (majorVersion = 6) and (minorVersion > 1) or (majorVersion>6) then
+            Result := wvWin8OrLater;
         end;
       VER_PLATFORM_WIN32_WINDOWS:
         begin
@@ -984,6 +996,11 @@ end;
 class function Scrn.DPIRatio: Single;
 begin
   Result := Screen.PixelsPerInch / 96;
+end;
+
+class function Scrn.ToCurrDpi(AInSize: Integer): Integer;
+begin
+  Result := AInSize * Screen.PixelsPerInch div 96;
 end;
 
 initialization

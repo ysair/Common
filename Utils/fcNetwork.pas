@@ -45,8 +45,18 @@ uses
 
 class function Network.OpenHttpURL(sURL: String): Boolean;
 var
-  l_BrowserFn: string;
+  l_BrowserFn, l_Cmd: string;
 begin
+  l_Cmd := fcRegistry.Reg.SH_GetKeyValue(HKEY_CLASSES_ROOT, 'HTTP\shell\open\command', '');
+  if Pos('%1', l_Cmd)>0 then
+  begin
+    l_Cmd := Str.FastReplace(l_Cmd, '%1', sURL);
+    if WinExec(PAnsiChar(AnsiString(l_Cmd)), SW_SHOW)>32 then
+    begin
+      Exit(True);
+    end;
+  end;
+
   l_BrowserFn := GetDefaultBrowerFileName;
   Result := ShellExecute(0, 'open', pchar(l_BrowserFn), pchar(sURL), nil, sw_show)>=32;
 end;

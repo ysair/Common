@@ -261,7 +261,7 @@ begin
   begin
     // 这样会限制中文邮件地址，比如：溪泉@263.net
     // 增加了%的支持，某些OA系统用到这个字符
-    l_Chars := 'abcdefghijklmnopqrstuvwxyz._-@1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ%';
+    l_Chars := 'abcdefghijklmnopqrstuvwxyz._-@1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ#$%&=';
     l_AtCount := 0;
     for l_C in ABasicEmail do
     begin

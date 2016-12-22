@@ -18,6 +18,7 @@ type
 
 implementation
 
+
 { XML }
 
 class function XML.ReadAttributesToBool(ANode: IXMLNode; const AAttribName: string;

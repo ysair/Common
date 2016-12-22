@@ -4,7 +4,7 @@ interface
 
 uses
   Windows, Classes, SysUtils, Controls, DB, cxTL, Variants, Math,
-  cxDropDownEdit, dxBar, dxNavBar, dxNavBarStyles, cxCustomData,
+  cxDropDownEdit, dxBar, {dxNavBar, dxNavBarStyles,} cxCustomData,
   cxGridTableView, cxGridDBTableView, cxDBTL, dxCore;
 
 type
@@ -22,11 +22,11 @@ type
     procedure SetDefaultPropertyValues;
   end;
 
-  TdxNavBarHelper = class helper for TdxNavBar
+  {TdxNavBarHelper = class helper for TdxNavBar
   public
     procedure SetDefaultStylesFont(const AFontName : string;
         const AItemFontSize : Integer = 0; const AGroupFontSize : Integer = 0);
-  end;
+  end;//}
 
   TcxTreeListHelper = class helper for TcxTreeList
   public
@@ -177,7 +177,7 @@ end;
 
 { TdxNavBarHelper }
 
-procedure TdxNavBarHelper.SetDefaultStylesFont(const AFontName: string;
+{procedure TdxNavBarHelper.SetDefaultStylesFont(const AFontName: string;
   const AItemFontSize, AGroupFontSize: Integer);
 
   procedure _SetFont(const AStyle : TdxNavBarBaseStyle; const AFontSize : Integer);
@@ -185,7 +185,7 @@ procedure TdxNavBarHelper.SetDefaultStylesFont(const AFontName: string;
     AStyle.Font.Name  :=  AFontName;
     if AFontSize <> 0 then
       AStyle.Font.Size  :=  AFontSize;
-  end;//}
+  end;
 
 begin
   _SetFont(DefaultStyles.Button, AItemFontSize);
@@ -201,7 +201,7 @@ begin
   _SetFont(DefaultStyles.GroupHeaderActivePressed, AItemFontSize);
   _SetFont(DefaultStyles.GroupHeaderHotTracked, AGroupFontSize);
   _SetFont(DefaultStyles.GroupHeaderPressed, AItemFontSize);
-end;
+end;//}
 
 { TcxTreeListHelper }
 

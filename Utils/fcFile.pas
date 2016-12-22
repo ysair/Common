@@ -61,7 +61,10 @@ type
     /// <param name="AFilter">文件过滤条件</param>
     /// <param name="ADefaultDir">默认目录</param>
     /// <returns>选择的文件名</returns>
-    class function SelectFile(AForm: TForm; const AFilter: String = ''; const ADefaultDir: String = ''; const ACanMultFile: Boolean=false): String; static;
+    class function SelectFile(AForm: TForm; const AFilter: String = ''; const ADefaultDir: String = ''; const ACanMultFile: Boolean=false; const AType: Integer=1): String; static;
+    class function OpenFileDlg(AForm: TForm; const AFilterOrFileExt: String): string; static;
+    class function SaveFileDlg(AForm: TForm; const AFilterOrFileExt: String): string; static;
+
 
     class function IsFileReadOnly(AFileName: String): boolean; static;
     class function SetFileReadOnly(AFileName: String; AValue: boolean): boolean; static;
@@ -72,7 +75,8 @@ type
 
     //分别对应文件创建时间，访问时间，修改时间
     class function GetFileDateTime(const FileName: string; FileTimeType: TFileTimeType): TDateTime; static;
-    class function SetFileDateTime(const FileName: string; FileTimeType: TFileTimeType; DateTime: TDateTime): Integer; static;
+    class function SetFileDateTime(const FileName: string; FileTimeType: TFileTimeType; DateTime: TDateTime): Integer; overload; static;
+    class procedure SetFileDateTime(const FileName: string; DateTime: TDateTime); overload; static;
 
 
 
@@ -94,8 +98,10 @@ type
     class function SelectDirectory(const Caption: string; const Root: String; out Directory: string; const AHandle: HWND = 0): boolean; overload; static; {不使用这个，因为无法创建目录}
 
     class function Open(const AFileName: string): boolean; static;
+    class function OpenWith(const AFileName: string): boolean; static; //弹出打开为..的对话框并且打开
     class function FindFiles(const AList: TStrings; const APath: String; const AFileName: string = '*.*'; const ASubFolder: boolean = False): DWORD; overload; static;
     class function FindFiles(const AList: TList; const APath: String; const AFileName: string = '*.*'; const ASubFolder: boolean = False; const ACallBackFunc : TFindFilesCallBackFunc = nil): DWORD; overload; static;
+    class function FindFileInFolder(const APath: String; const AFileName: string = '*.*'; const ASubFolder: boolean = False): Boolean; static;
     class function FindFolders(const AList: TStrings; const APath: String;const AFolderName: string = '*'; const ASubFolder: boolean = False): DWORD; static;
     class procedure FindTree(const Path: String; CurrLevel, WantLevelCount: Integer; var TreeResult: TStringList); overload; static;
     class procedure FindTree(const Path: String; CurrLevel, WantLevelCount: Integer; var TreeResult: TStringList; var ARunning: boolean); overload; static;
@@ -169,6 +175,9 @@ type
     class function GetFilesFromClipboard(AFileList: TStringList): Boolean; static;
 
     class function LocalFileToURL(const AFileName : string):string; static;
+
+    {用于更新文件时，如果覆盖不成功，先把原来的文件改为为.old，然后在复制过去}
+    class function UpdateFile_DoCopy(AFromFile, AToFile: string): Boolean; static;
   end;
 
   FileVersion = record
@@ -542,6 +551,8 @@ var
 begin
   if not FileExists((AFileName)) then
     Exit(True);
+  if Windows.DeleteFile(PChar(AFileName)) then
+    Exit(True);
 
   FillChar(fo, SizeOf(fo), 0);
   with fo do
@@ -638,6 +649,62 @@ begin
       Result := Result + l_File[I];
 
   Result := l_Path + Result;
+end;
+
+class function Files.FindFileInFolder(const APath, AFileName: string;
+  const ASubFolder: boolean): Boolean;
+var
+  sname: string;
+  sPath: String;
+  info: SysUtils.TSearchRec;
+begin
+  if APath[Length(APath)] <> '\' then
+    sPath := APath + '\'
+  else
+    sPath := APath;
+  if AFileName = '' then
+    sname := '*.*'
+  else
+  if ExtractFileExt(AFileName) = AFileName then   // .xml
+    sname := '*' + AFileName
+  else
+    sname := AFileName;
+  Result := false;
+  if FindFirst(sPath + sname, faAnyFile and (not faDirectory), info)=0 then
+  begin
+    try
+      if (info.Name <> '') and (info.Name <> '.') and (info.Name <> '..') and
+        ((info.Attr and faDirectory) <> faDirectory)
+      then
+        Exit(True);
+      while 0 = FindNext(info) do
+        if (info.Name <> '') and (info.Name <> '.') and (info.Name <> '..') and
+          ((info.Attr and faDirectory) <> faDirectory)
+        then
+          Exit(True);
+    finally
+      SysUtils.FindClose(info);
+    end;
+
+    if ASubFolder then
+      if 0 = FindFirst(sPath + '*', faDirectory, info) then
+        try
+          if (info.Name <> '.') and (info.Name <> '..') and
+            ((info.Attr and faDirectory) = faDirectory)
+          then
+            if FindFileInFolder(sPath + info.Name, sname, ASubFolder) then
+              Exit(True);
+
+          while 0 = FindNext(info) do
+            if (info.Name <> '.') and (info.Name <> '..') and
+              ((info.Attr and faDirectory) = faDirectory)
+            then
+              if FindFileInFolder(sPath + info.Name, sname, ASubFolder) then
+                Exit(True);
+        finally
+          SysUtils.FindClose(info);
+        end;
+  end;
 end;
 
 class function Files.FindFiles(
@@ -814,8 +881,6 @@ begin
 
     while FindNext(fs) = 0 do
     begin
-      if RandomRange(0, 10) = 0 then
-        Application.ProcessMessages;
       if not Running^ then
         Break;
 
@@ -1029,33 +1094,63 @@ begin
   if (not Result)
     and (fcStr.Arr.PosInStrArray(ExtractFileExt(AFileName), C_FileExt_CanExecute, false) =-1)
   then
-    Result := ShellExecute(0,
-                          'open',
-                          'rundll32.exe',
-                          PChar(Format('shell32.dll,OpenAs_RunDLL "%s"', [AFileName])),
-                          nil,
-                          SW_Show) > 32;
+    Result := Files.OpenWith(AFileName);
+end;
+
+class function Files.OpenFileDlg(AForm: TForm; const AFilterOrFileExt: String): string;
+begin
+  Result := SelectFile(AForm, AFilterOrFileExt, '', false, 1);
+end;
+
+class function Files.OpenWith(const AFileName: string): boolean;
+begin
+  //这样不对：RUNDLL32.EXE shell32, OpenAs_RunDLL "Z:\test 13\MailProxy.rar"
+  //应该这样：RUNDLL32.EXE shell32, OpenAs_RunDLL Z:\test 13\MailProxy.rar
+  //居然不支持双引号
+  Result := ShellExecute(0,
+                        'open',
+                        'rundll32.exe',
+                        PChar(Format('shell32.dll,OpenAs_RunDLL %s', [AFileName])),
+                        nil,
+                        SW_Show) > 32;
+
 end;
 
 class function Files.SelectFile(AForm: TForm;
   const AFilter, ADefaultDir: String;
-  const ACanMultFile: Boolean): String;
+  const ACanMultFile: Boolean;
+  const AType: Integer
+  ): String;
 var
-  l_Dlg1: TFileOpenDialog;  {vista/win7 and later}
-  l_Dlg2: TOpenDialog;
+  l_OpenDlgVista: TFileOpenDialog;  {vista/win7 and later}
+  l_OpenDlgNormal: TOpenDialog;
+  l_SaveDlgVista: TFileSaveDialog;
+  l_SaveDlgNormal: TSaveDialog;
 
   l_Handle: THandle;
 
-  procedure _AssignFileFilter;
+  //邮件文件(*.eml)|*.eml
+  //AFilter传入的可能只是 .txt 这种格式
+  function _GetInFilter: string;
+  begin
+    if (AFilter<>'') and (AFilter[1]='.') then
+      Result := '*'+ AFilter
+    else
+      Result := AFilter;
+    if Pos('|', Result)<=0 then
+      Result := Result + '|' + Result;
+  end;
+
+  procedure _AssignFileFilter(AFileTypeItems: TFileTypeItems);
   var
     I, J: Integer;
     FilterStr: string;
   begin
-    FilterStr := AFilter;
+    FilterStr := _GetInFilter;
     J := 1;
     I := AnsiPos('|', FilterStr);
     while I <> 0 do
-      with l_Dlg1.FileTypes.Add do
+      with AFileTypeItems.Add do
       begin
         DisplayName := Copy(FilterStr, J, I - J);
         if not SysLocale.FarEast then
@@ -1082,6 +1177,27 @@ var
         end;
       end;
   end;
+
+  procedure _CheckNewFileExt(var AIn: string);
+  var
+    l_Str, l_Ext: string;
+    I: Integer;
+  begin
+    //用户不会输入扩展名的，所以自动加上
+    if (AType = 2) and (not FileExists(AIn)) and (ExtractFileExt(AIn) = '') and (AFilter<>'') then
+    begin
+      l_Str := _GetInFilter;  //所有文件(*.*)|*.*|Office文档(*.doc,*.xls)|*.doc;*.xls|压缩文档(*.zip,*.rar)|*.zip;*.rar|图片文档|*.jpg;*.gif;*.jpeg;*.bmp;*.png
+      l_Ext := '';
+      for I := Length(l_Str) downto 1 do
+        if l_Str[I]='.' then
+          Break
+        else
+          l_Ext := l_Str[I] + l_Ext;
+
+      AIn := AIn + '.' + l_Ext;
+    end;
+  end;
+
 begin
   Result := '';
   if AForm <> nil then
@@ -1091,40 +1207,90 @@ begin
 
   if fcWindows.Win.GetWinVerIsVistaOrLater then
   begin
-    l_Dlg1 := TFileOpenDialog.Create(AForm);
-    try
-      l_Dlg1.DefaultFolder := ADefaultDir;
-      if ACanMultFile then
-        l_Dlg1.Options := l_Dlg1.Options + [fdoAllowMultiSelect, fdoFileMustExist];
-      _AssignFileFilter;
-      if l_Dlg1.Execute(l_Handle) then
-      begin
+    if AType = 2 then   {Save Dialg}
+    begin
+      l_SaveDlgVista := TFileSaveDialog.Create(AForm);
+      try
+        l_SaveDlgVista.DefaultFolder := ADefaultDir;
         if ACanMultFile then
-          Result := l_Dlg1.Files.Text
-        else
-          Result := l_Dlg1.FileName;
+          l_SaveDlgVista.Options := l_SaveDlgVista.Options + [fdoAllowMultiSelect, fdoFileMustExist];
+        _AssignFileFilter(l_SaveDlgVista.FileTypes);
+        if l_SaveDlgVista.Execute(l_Handle) then
+        begin
+          if ACanMultFile then
+            Result := l_SaveDlgVista.Files.Text
+          else
+          begin
+            Result := l_SaveDlgVista.FileName;
+            _CheckNewFileExt(Result);
+          end;
+        end;
+      finally
+        l_SaveDlgVista.Free;
       end;
-    finally
-      l_Dlg1.Free;
+    end
+    else  {Open Dialog}
+    begin
+      l_OpenDlgVista := TFileOpenDialog.Create(AForm);
+      try
+        l_OpenDlgVista.DefaultFolder := ADefaultDir;
+        if ACanMultFile then
+          l_OpenDlgVista.Options := l_OpenDlgVista.Options + [fdoAllowMultiSelect, fdoFileMustExist];
+        _AssignFileFilter(l_OpenDlgVista.FileTypes);
+        if l_OpenDlgVista.Execute(l_Handle) then
+        begin
+          if ACanMultFile then
+            Result := l_OpenDlgVista.Files.Text
+          else
+            Result := l_OpenDlgVista.FileName;
+        end;
+      finally
+        l_OpenDlgVista.Free;
+      end;
     end;
   end
   else
   begin
-    l_Dlg2 := TOpenDialog.Create(AForm);
-    try
-      l_Dlg2.InitialDir := ADefaultDir;
-      l_Dlg2.Filter := AFilter;
-      if ACanMultFile then
-        l_Dlg2.Options := l_Dlg2.Options + [ofAllowMultiSelect, ofFileMustExist];
-      if l_Dlg2.Execute(l_Handle) then
-      begin
+    if AType = 2 then   {Save Dialg}
+    begin
+      l_SaveDlgNormal := TSaveDialog.Create(AForm);
+      try
+        l_SaveDlgNormal.InitialDir := ADefaultDir;
+        l_SaveDlgNormal.Filter := _GetInFilter;
         if ACanMultFile then
-          Result := l_Dlg2.Files.Text
-        else
-          Result := l_Dlg2.FileName;
+          l_SaveDlgNormal.Options := l_SaveDlgNormal.Options + [ofAllowMultiSelect, ofFileMustExist];
+        if l_SaveDlgNormal.Execute(l_Handle) then
+        begin
+          if ACanMultFile then
+            Result := l_SaveDlgNormal.Files.Text
+          else
+          begin
+            Result := l_SaveDlgNormal.FileName;
+            _CheckNewFileExt(Result);
+          end;
+        end;
+      finally
+        l_SaveDlgNormal.Free;
       end;
-    finally
-      l_Dlg2.Free;
+    end
+    else
+    begin
+      l_OpenDlgNormal := TOpenDialog.Create(AForm);
+      try
+        l_OpenDlgNormal.InitialDir := ADefaultDir;
+        l_OpenDlgNormal.Filter := _GetInFilter;
+        if ACanMultFile then
+          l_OpenDlgNormal.Options := l_OpenDlgNormal.Options + [ofAllowMultiSelect, ofFileMustExist];
+        if l_OpenDlgNormal.Execute(l_Handle) then
+        begin
+          if ACanMultFile then
+            Result := l_OpenDlgNormal.Files.Text
+          else
+            Result := l_OpenDlgNormal.FileName;
+        end;
+      finally
+        l_OpenDlgNormal.Free;
+      end;
     end;
   end;
 end;
@@ -1231,6 +1397,13 @@ begin
       ShellMalloc.Free(Buffer);
     end;
   end;
+end;
+
+class function Files.SaveFileDlg(AForm: TForm; const AFilterOrFileExt: String): string;
+begin
+  Result := SelectFile(AForm, AFilterOrFileExt, '', false, 2);
+  if Result <> '' then
+    ForceDirectories(ExtractFilePath(Result));
 end;
 
 class function Files.SelectDir(AParentHandle: THandle; const ACaption, ALabel: string;
@@ -1376,12 +1549,32 @@ begin
     DosDateTimeToFileTime(LongRec(DosDateTime).Hi, LongRec(DosDateTime).Lo, LocalFileTime);
     LocalFileTimeToFileTime(LocalFileTime, FileTime);
     FileTimes[FileTimeType] := @FileTime;
-    if SetFileTime(Handle, FileTimes[fttCreation], FileTimes[fttLastAccess],
-      FileTimes[fttLastWrite]) then Exit;
+    if SetFileTime(Handle, FileTimes[fttCreation], FileTimes[fttLastAccess], FileTimes[fttLastWrite]) then
+      Exit;
   finally
     FileClose(Handle);
   end;
   Result := GetLastError;
+end;
+
+class procedure Files.SetFileDateTime(const FileName: string;
+  DateTime: TDateTime);
+var
+  Handle: THandle;
+  LocalFileTime, FileTime: TFileTime;
+  DosDateTime: Integer;
+begin
+  DosDateTime := DateTimeToFileDate(DateTime);
+  Handle := FileOpen(FileName, fmOpenWrite or fmShareDenyNone);
+  if Handle <> INVALID_HANDLE_VALUE then
+  try
+    DosDateTimeToFileTime(LongRec(DosDateTime).Hi, LongRec(DosDateTime).Lo, LocalFileTime);
+    LocalFileTimeToFileTime(LocalFileTime, FileTime);
+    if SetFileTime(Handle, @FileTime, @FileTime, @FileTime) then
+      Exit;
+  finally
+    FileClose(Handle);
+  end;
 end;
 
 class function Files.SetFileReadOnly(AFileName: String;
@@ -1531,6 +1724,30 @@ begin
     end;
   except
     Result := false;
+  end;
+end;
+
+class function Files.UpdateFile_DoCopy(AFromFile, AToFile: string): Boolean;
+var
+  tmpfile: string;
+begin
+  if not FileExists(AFromFile) then
+    Exit(False);
+
+  ForceDirectories(ExtractFilePath(AToFile));
+  Result := Files.CopyFile(AFromFile, AToFile);
+  if not Result then
+  begin
+    tmpfile :=  ChangeFileExt(AToFile, '.old');
+    if FileExists(tmpfile) then
+      Files.DeleteFile(tmpfile);
+    if not Files.RenameFile(AToFile, tmpfile) then
+      Exit(False);
+    if not ForceDirectories(ExtractFilePath(AToFile)) then
+      Exit(False);
+    if not Files.CopyFile(AFromFile, AToFile) then
+      Exit(False);
+    Result := True;
   end;
 end;
 

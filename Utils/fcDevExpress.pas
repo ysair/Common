@@ -11,6 +11,8 @@ type
   TdxBarAccess = class(TdxBar);
 
   Dev = record
+    class procedure ImageListDpiCovert(AImageList: TcxImageList; AImgListWidthIn96Dpi, AImgListHeightIn96Dpi: Integer; const AConvertOrgImagesInList: Boolean=True); static;
+
     /// <summary>
     /// 设置BarItem的Visible
     /// </summary>
@@ -78,6 +80,8 @@ type
     class procedure SetVisible(AItem: TdxBarItem; AVisible: Boolean); static;
 
     class function ImageListLoadPictureFile(AImageList: TcxImageList; AFileName: String; const AClearOrgImage: Boolean): Boolean; static;
+    class function ImageListLoadPictureFileWithStretch(AImageList: TcxImageList; AFileName: String; const AImgFileOneIconWidth, AImgFileOneIconHeight: Integer; const AClearOrgImage: Boolean): Boolean; static;
+
     class function GetImageInfoFromFile(const AFileName: string; AImageInfo: TcxImageInfo): Boolean; static;
 
 
@@ -88,8 +92,8 @@ type
 
     {ABkDC 和 ABkColor二选一，作为背景来处理}
     class function DrawFromImageListExt(AImages: TCustomImageList; AImageIndex: Integer;
-        const ABkDC: THandle=0; const ABk_X:Integer=0; const ABk_Y: Integer=0;
-        const ABkColor: TColor=clWhite;
+        const ABkDC: THandle=0; const ABk_X:Integer=0; const ABk_Y: Integer=0;  {Line1, 二选一}
+        const ABkColor: TColor=clWhite;                                         {Line2, 二选一}
         const ASmoothImage: Boolean = False;
         const AOutBmpWidth: Integer=0; const AOutBmpHeigth: Integer=0): TcxAlphaBitmap; overload; static;
   end;
@@ -415,16 +419,11 @@ class function Dev.DrawFromImageListExt(AImages: TCustomImageList;
 
   procedure _DrawImage(ABitmap: TcxAlphaBitmap; ADrawMode: TcxImageDrawMode);
   var
-    AImageBitmap, AMaskBitmap: TcxAlphaBitmap;
-    AConstantAlpha: Byte;
-    AIsAlphaUsed: Boolean;
+    l_ImageBitmap, l_MaskBitmap: TcxAlphaBitmap;
+    l_IsAlphaUsed: Boolean;
   begin
-    if not Assigned(CustomDrawImageProc) or not CustomDrawImageProc(ABitmap.Canvas, AImages, AImageIndex, nil, ABitmap.ClientRect, ADrawMode) then
-    begin
-      cxPrepareBitmapForDrawing(nil, AImages, AImageIndex, True, clNone, AImageBitmap, AMaskBitmap, AIsAlphaUsed);
-      AConstantAlpha := $FF;
-      AImageBitmap.AlphaBlend(ABitmap, ABitmap.ClientRect, ASmoothImage, AConstantAlpha);
-    end;
+    cxPrepareBitmapForDrawing(nil, AImages, AImageIndex, True, clNone, l_ImageBitmap, l_MaskBitmap, l_IsAlphaUsed);
+    l_ImageBitmap.AlphaBlend(ABitmap, ABitmap.ClientRect, ASmoothImage, $FF);
   end;
 var
   l_Rect: TRect;
@@ -435,6 +434,62 @@ begin
   begin
     _DrawBackGround(Result);
     _DrawImage(Result, idmNormal);
+  end;
+end;
+
+class procedure Dev.ImageListDpiCovert(AImageList: TcxImageList; AImgListWidthIn96Dpi,
+  AImgListHeightIn96Dpi: Integer; const AConvertOrgImagesInList: Boolean);
+var
+  l_Radio: Real;
+  l_NewBmps, l_NewMasks: array of Graphics.TBitmap;
+  I, l_NewWidht, l_NewHeight: Integer;
+begin
+  l_Radio := Screen.PixelsPerInch div 48 / 2;
+  if l_Radio <1 then
+    l_Radio := 1;
+
+(*  if Screen.PixelsPerInch>=288 then     {300%}
+    l_Radio := 3
+  else
+  if Screen.PixelsPerInch>=240 then     {250%}
+    l_Radio := 2.5
+  else
+  if Screen.PixelsPerInch>192 then     {200%}
+    l_Radio := 2.0
+  else
+  if Screen.PixelsPerInch>=144 then     {150%}
+    l_Radio := 1.5
+  else
+    l_Radio := 1;  //*)
+  if l_Radio<>1 then
+  begin
+    l_NewWidht := Trunc(AImgListWidthIn96Dpi * l_Radio);
+    l_NewHeight := Trunc(AImgListHeightIn96Dpi * l_Radio);
+    {保存原来大小}
+    if AConvertOrgImagesInList then
+    begin
+      SetLength(l_NewBmps, AImageList.Count);
+      SetLength(l_NewMasks, AImageList.Count);
+      for I := 0 to AImageList.Count - 1 do
+      begin
+        l_NewBmps[I] := Graphics.TBitmap.Create;
+        l_NewMasks[I] := Graphics.TBitmap.Create;
+        AImageList.GetImageInfo(I, l_NewBmps[I], l_NewMasks[I]);
+      end;
+    end;
+
+    AImageList.Width := l_NewWidht;
+    AImageList.Height := l_NewHeight;
+    AImageList.Clear;
+
+    {把原图载入}
+    if AConvertOrgImagesInList then
+      for I := Low(l_NewBmps) to High(l_NewBmps) do
+      begin
+        AImageList.Add(l_NewBmps[I], l_NewMasks[I]);
+        l_NewBmps[I].Free;
+        l_NewMasks[I].Free;
+      end;
   end;
 end;
 
@@ -506,6 +561,116 @@ class function Dev.ImageListLoadPictureFile(AImageList: TcxImageList;
           if IsGlyphAssigned(AMask) then
             cxDrawBitmap(l_DestMask.Canvas.Handle, AMask, l_DestRect, l_SrcPoint);
           AddImage(l_DestBitmap, l_DestMask, GetDefaultTransparentColor(l_DestBitmap, l_DestMask), AInsertedItemIndex);
+          Result := Result + 1;
+        end;
+    finally
+      l_DestMask.Free;
+      l_DestBitmap.Free;
+    end;
+  end;
+
+var
+  l_ImageInfo: TcxImageInfo;
+  l_InsertedItemIndex: Integer;
+begin
+  Result := False;
+  AImageList.BeginUpdate;
+  l_ImageInfo := TcxImageInfo.Create;
+  try
+    if AClearOrgImage then
+      AImageList.Clear;
+    l_InsertedItemIndex := AImageList.Count;
+
+    if GetImageInfoFromFile(AFileName, l_ImageInfo) then
+      Result := InternalAddImage(l_ImageInfo.Image, l_ImageInfo.Mask, l_InsertedItemIndex) >0;
+  finally
+    l_ImageInfo.Free;
+    AImageList.EndUpdate;
+  end;
+end;
+
+class function Dev.ImageListLoadPictureFileWithStretch(AImageList: TcxImageList; AFileName: String;
+  const AImgFileOneIconWidth, AImgFileOneIconHeight: Integer;
+  const AClearOrgImage: Boolean): Boolean;
+
+  function GetDefaultTransparentColor(AImage, AMask: Graphics.TBitmap): TColor;
+  begin
+    if IsGlyphAssigned(AMask) or dxIsAlphaUsed(AImage) then
+      Result := clNone
+    else
+      Result := AImage.Canvas.Pixels[0, AImage.Height - 1];
+  end;
+
+  procedure AddImage(AImage, AMask: Graphics.TBitmap; AMaskColor: TColor; var AInsertedImageIndex: Integer);
+  var
+    l_ImageInfo: TcxImageInfo;
+  begin
+    l_ImageInfo := TcxImageInfo.Create;
+    try
+      l_ImageInfo.Image := AImage;
+      l_ImageInfo.Mask := AMask;
+      l_ImageInfo.MaskColor := AMaskColor;
+      if IsGlyphAssigned(l_ImageInfo.Mask) then
+        AImageList.Add(l_ImageInfo.Image, l_ImageInfo.Mask)
+      else
+        AImageList.AddMasked(l_ImageInfo.Image, l_ImageInfo.MaskColor);
+    finally
+      l_ImageInfo.Free;
+    end;
+  end;
+
+  function InternalAddImage(AImage, AMask: Graphics.TBitmap;
+    var AInsertedItemIndex: Integer): Integer;
+
+  var
+    l_ColCount, l_RowCount, l_ColIndex, l_RowIndex: Integer;
+    l_SourceImageSize: TSize;
+    l_DestBitmap, l_DestMask: TcxBitmap;
+    l_DestRect: TRect;
+    l_SrcPoint: TPoint;
+    l_StretchBmp: TcxBitmap32;
+  begin
+    Result := 0;
+
+    //if ((AImage.Width mod AImgFileOneIconWidth) + (AImage.Height mod AImgFileOneIconHeight)) = 0 then
+      l_SourceImageSize := cxGeometry.cxSize(AImgFileOneIconWidth, AImgFileOneIconHeight);    //拆分
+    //else
+    //  l_SourceImageSize := cxSize(AImage.Width, AImage.Height);    //所有的作为一个
+
+    l_ColCount := AImage.Width div l_SourceImageSize.cx;
+    l_RowCount := AImage.Height div l_SourceImageSize.cy;
+
+    l_DestBitmap := TcxBitmap.CreateSize(AImgFileOneIconWidth, AImgFileOneIconHeight, pf32bit);
+    if IsGlyphAssigned(AMask) then
+      l_DestMask := TcxBitmap.CreateSize(AImageList.Width, AImageList.Height, pf1bit)
+    else
+      l_DestMask := nil;
+    try
+      for l_RowIndex := 0 to l_RowCount - 1 do
+        for l_ColIndex := 0 to l_ColCount - 1 do
+        begin
+          l_SrcPoint := Point(l_ColIndex * l_SourceImageSize.cx, l_RowIndex * l_SourceImageSize.cy);
+
+          l_DestRect := cxGeometry.cxRectCenter(l_DestBitmap.ClientRect, Min(AImgFileOneIconWidth, l_SourceImageSize.cx), Min(AImgFileOneIconHeight, l_SourceImageSize.cy));
+          l_DestBitmap.Canvas.Brush.Color := GetDefaultTransparentColor(AImage, AMask);
+          l_DestBitmap.Canvas.FillRect(l_DestBitmap.ClientRect);
+
+          cxDrawBitmap(l_DestBitmap.Canvas.Handle, AImage, l_DestRect, l_SrcPoint);
+          if IsGlyphAssigned(AMask) then
+            cxDrawBitmap(l_DestMask.Canvas.Handle, AMask, l_DestRect, l_SrcPoint);
+
+          if (AImgFileOneIconWidth<>AImageList.Width) or (AImgFileOneIconHeight<>AImageList.Height) then
+          begin
+            l_StretchBmp := TcxBitmap32.CreateSize(AImageList.Width, AImageList.Height, True);
+            try
+              cxAlphaBlend(l_StretchBmp, l_DestBitmap, l_StretchBmp.ClientRect, l_DestBitmap.ClientRect, True, $FF);
+              AddImage(l_StretchBmp, l_DestMask, GetDefaultTransparentColor(l_StretchBmp, l_DestMask), AInsertedItemIndex);
+            finally
+              l_StretchBmp.Free;
+            end;
+          end
+          else
+            AddImage(l_DestBitmap, l_DestMask, GetDefaultTransparentColor(l_DestBitmap, l_DestMask), AInsertedItemIndex);
           Result := Result + 1;
         end;
     finally
@@ -626,6 +791,5 @@ begin
   else
     AItem.Visible := ivNever;
 end;
-
 
 end.

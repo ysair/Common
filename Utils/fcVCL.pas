@@ -9,7 +9,6 @@ type
   Vcl = record
     class procedure ShowAFormInControl(AForm: TForm; AControl: TWinControl); static;
     class procedure ShowAFormInAPanel(AForm: TForm; APanel: TPanel); static;
-    class function ImageListLoadPictureFile(AImageList: TImageList; AFileName: String; const AClearOrgImage: Boolean=true): Boolean; static;
 
     /// <summary>
     /// 将PageControl中所有页面设置为不可见
@@ -134,43 +133,6 @@ begin
   AForm.BorderStyle := bsNone;
   AForm.Align := alClient;
   AForm.Show;
-end;
-
-class function vcl.ImageListLoadPictureFile(AImageList: TImageList;
-  AFileName: String; const AClearOrgImage: Boolean): Boolean;
-var
-  I, l_X, l_Y, l_Row, l_Col: Integer;
-  l_SrcPic, l_ABMP: TBitmap;
-const
-  l_BKColor = clFuchsia;
-begin
-  if not FileExists(AFileName) then
-    Exit(False);
-
-  Result := True;
-  if AClearOrgImage then
-    AImageList.Clear;
-
-  l_ABMP  := TBitmap.Create;
-  l_SrcPic := TBitmap.Create;
-  try
-    l_SrcPic.LoadFromFile(AFileName);
-    l_Row := l_SrcPic.Height  div AImageList.Height;  //多少行
-    l_Col := l_SrcPic.Width div AImageList.Width;     //多少列
-    l_ABMP.Width := AImageList.Width;
-    l_ABMP.Height := AImageList.Height;
-
-    for I := 0 to l_Col * l_Row-1 do
-    begin
-      l_X := (I mod l_Col) * AImageList.Width;
-      l_Y := (I div l_Col) * AImageList.Height;
-      BitBlt(l_ABMP.Canvas.Handle, 0, 0, AImageList.Width, AImageList.Height, l_SrcPic.Canvas.Handle, l_X, l_Y, SRCCOPY);
-      AImageList.AddMasked(l_ABMP, l_BKColor);
-    end;
-  finally
-    l_ABMP.Free;
-    l_SrcPic.Free;
-  end;
 end;
 
 class function Vcl.MouseInClient(AControl: TControl): Boolean;

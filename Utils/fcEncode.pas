@@ -3,7 +3,7 @@ unit fcEncode;
 interface
 
 uses
-  Classes, SysUtils;
+  Classes, SysUtils, Windows;
 
 type
   Http = record
@@ -115,8 +115,14 @@ type
 
   OtherDecode = class
     {几种特殊的编码的解码}
-    class function DecodeBySpecialCharset(AInList: TStrings; AOutList: TStrings; ACharset: string): Boolean;
+    class function DecodeBySpecialCharset(AInList: TStrings; AOutList: TStrings; ACharset: string): Boolean; static;
+    class function IsBig5String(const AInStr:string; DefaultValue: Boolean): Boolean; static;
+    class function GB2Big(GB: string): string; static;
+    class function Big2GB(Big: string): string; static;
+
   end;
+
+
 
 
 implementation
@@ -423,6 +429,15 @@ end;
 
 { OtherDecode }
 
+class function OtherDecode.Big2GB(Big: string): string;
+var
+  Len: Integer;
+begin
+  Len := Length(Big);
+  SetLength(Result, Len);
+  LCMapString(GetUserDefaultLCID, LCMAP_SIMPLIFIED_CHINESE, PChar(Big), Len, PChar(Result), Len);
+end;
+
 class function OtherDecode.DecodeBySpecialCharset(AInList, AOutList: TStrings; ACharset: string): Boolean;
 var
   l_Stream: TMemoryStream;
@@ -455,6 +470,82 @@ begin
       l_Encoding.Free;
     end;
   end;
+end;
+
+class function OtherDecode.GB2Big(GB: string): string;
+var
+  Len: Integer;
+begin
+  Len := Length(GB);
+  SetLength(Result, Len);
+  LCMapString(GetUserDefaultLCID, LCMAP_TRADITIONAL_CHINESE, PChar(GB), Len, PChar(Result), Len);
+end;
+
+class function OtherDecode.IsBig5String(const AInStr: string; DefaultValue: Boolean): Boolean;
+  //GB码A840-A895，A940-A996是标点符号
+  function IsChineseInterpunction(iByte : byte):boolean;
+  begin
+    Result := (iByte = $A8) or (iByte = $A9);
+  end;
+  function IsChineseFirstChar(iByte : byte):boolean;
+  begin
+    Result := (iByte > $A0) and (iByte < $FF);
+  end;
+  function IsTypicalBig5SecondChar(iByte : byte):boolean;
+  begin
+    Result := (iByte > $3F) and (iByte < $7F);
+  end;
+var
+  i:integer;
+  iByte: byte;
+  bFirstByte,
+  bSkipThisChar:boolean;
+  iBig5Count, isGBCount:integer;
+  iTotal:integer;
+  l_Str: AnsiString;
+begin
+  result := DefaultValue;
+  bFirstByte := true;
+  bSkipThisChar := false;
+
+  iBig5Count := 0;
+  isGBCount := 0;
+  iTotal:=0;
+  l_Str := AnsiString(AInStr);
+
+  for i := 1 to Length(l_Str) do
+  begin
+    if bSkipThisChar then
+    begin
+      bSkipThisChar := false;
+      continue;
+    end;
+
+    iByte := byte(l_Str[i]);
+
+    if bFirstByte then
+    begin
+      if IsChineseInterpunction(iByte) then
+        bSkipThisChar := true
+      else if IsChineseFirstChar(iByte) then
+        bFirstByte := false;
+    end
+    else
+    begin
+      bFirstByte := true;
+      inc(iTotal);
+      if IsTypicalBig5SecondChar(iByte) then
+        inc(iBig5Count)
+      else
+        inc(isGBCount);
+    end;
+  end;
+
+  if iBig5Count * 5 > itotal then
+    result := true
+  else
+  if isGBCount > 0 then
+    Result := false;
 end;
 
 { Utf8 }

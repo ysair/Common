@@ -122,6 +122,8 @@ type
     class function SafeFormat(const Format: string; const Args: array of const ): string; static;
 
 
+
+
     /// <summary>
     /// 计算一个stringlist.text的长度，等于Length(AList.Text)但是速度快
     /// </summary>
@@ -194,9 +196,9 @@ type
     class procedure QuickSortList(const AList: TStringList); static;
 
     // 追加字符串， 相当于代码：
-    // if ASourceStr='' then Result := AAddedValue
-    // else Reuslt := ASourceStr + ', ' + AAddedValue
-    class function  AppendStr(ASourceStr, AAddedValue: string; const ASplit: string = ','): string; static;
+    // if ASourceStr='' then Result := ASubAdded
+    // else Reuslt := ASourceStr + ', ' + ASubAdded
+    class function  AppendStr(ASourceStr, ASubAdded: string; const ASplit: string = ','): string; static;
 
 
     class function StrToCharset(const AStr: string): TSysCharSet; static;
@@ -204,6 +206,7 @@ type
     class function VarToInt(AVar: Variant; const ADef: Integer=0): Int64; static;
     class function VarToBool(AVar: Variant; const ADef: Boolean=false): Boolean; static;
     class function VarToDateTime(AVar: Variant; const ADef: TDateTime=0.0): TDateTime; static;
+    class function IntToStrEx(AIn: Int64; const AOutLen: Integer = -1): string;  static;
 
     class function FileExt2FileFilter(AFileExt: string): string; static;
 
@@ -261,14 +264,15 @@ type
   ?       任何一个字符或者汉字
   *       任何字符
   [^abc]  除了 a b c 意外的任何字符
-  [!abc]  同上
+  [!abc]  同[^abc]
   [a-e]   包含 a 到 e 的字符
 }
   Match = class
   private
-    class function Matche(Pattern, Text: string): Integer; static;
+//    class function Matche(Pattern, Text: string): Integer; static;
     class function MatchAfterStar(Pattern, Text: string): Integer; static;
   public
+    class function Matche(Pattern, Text: string): Integer; static;
     class function IsMatch(const Pattern, Text: string): Boolean; static;
   end;
 
@@ -281,7 +285,7 @@ type
     class function StrListToArray(AList: TStringList): TStringArray; overload; static;
     class function StrListToArray(AList: TStringList; var AOutArr: TStringArray): Boolean; overload; static;
     class function IntListToArray(AList: TList<Integer>): TIntegerArray; static;
-
+    class procedure ArrayToStrList(AArr:  array of string; AList: TStrings; const AClearStrList: Boolean=True); static;
     class function MergeStrArray(AArr1, AArr2: array of string): TStringArray; static;
   end;
 
@@ -333,6 +337,8 @@ type
     class function GetFilteredCharset(const sCharset, defaultCharset: String): string; static;
 
     class function RemoveScript(const AHtml : string):string; static;
+    class function RemoveBodyOverFlow(const AHtml : string):string; static;
+    class function RemoveContentEditable(const AHtml : string):string; static;
   end;
 
   Binary = record   //二进制
@@ -354,15 +360,15 @@ uses
 
 { Str }
 
-class function Str.AppendStr(ASourceStr, AAddedValue: string; const ASplit: string): string;
+class function Str.AppendStr(ASourceStr, ASubAdded: string; const ASplit: string): string;
 begin
-  if AAddedValue='' then
+  if ASubAdded='' then
     Result := ASourceStr
   else
   if ASourceStr='' then
-    Result := AAddedValue
+    Result := ASubAdded
   else
-    Result := ASourceStr + ASplit + AAddedValue
+    Result := ASourceStr + ASplit + ASubAdded
 end;
 
 class procedure Str.CopyIdList(AFromList, AToList: TList<Integer>);
@@ -685,6 +691,14 @@ begin
   AToList.Clear;
   for I := 0 to AFromList.Count - 1 do
     AToList.Add(IntToStr(AFromList[I]));
+end;
+
+class function Str.IntToStrEx(AIn: Int64; const AOutLen: Integer): string;
+begin
+  Result := SysUtils.IntToStr(AIn);
+  if AOutLen>0 then
+    while Length(Result) < AOutLen do
+      Result := '0'+ Result;
 end;
 
 class function Str.IsBig5String(const AInStr: string; DefaultValue: Boolean): Boolean;
@@ -1188,6 +1202,18 @@ end;
 
 { Arr }
 
+class procedure Arr.ArrayToStrList(AArr: array of string; AList: TStrings;
+  const AClearStrList: Boolean);
+var
+  I: Integer;
+begin
+  if AClearStrList then
+    AList.Clear;
+  for I := Low(AArr) to High(AArr) do
+    if AList.IndexOf(AArr[I])= -1 then
+      AList.Add(AArr[I]);
+end;
+
 class function Arr.IntListToArray(AList: TList<Integer>): TIntegerArray;
 var
   I: Integer;
@@ -1351,34 +1377,41 @@ class function HTML.GetHtmlBody(sHtml: string): string;
     end;
   end;
 
-  function _ReturnWithRemoveHtmlLabel: string;
-  begin
-    Result := sHtml;
-    while _RemoveFlag(Result, '<HTML') do ;
-    while _RemoveFlag(Result, '</HTML') do ;
-  end;
 var
   htmlBegin, bodyBegin, bodyEnd : Integer;
+  l_Str: string;
 begin
-  {考虑到某种情况（手机回复邮件的时候， 总是在<Html>标签前加入回复的内容。破坏整个html完整性）}
-  htmlBegin := FastPosNoCase(sHtml, '<HTML', Length(sHtml), 5, 1);
-  if htmlBegin > 10 then  {表示html前面还有东西}
-    Exit(_ReturnWithRemoveHtmlLabel);
+  Result := sHtml;
+  try
+    {考虑到某种情况（手机回复邮件的时候， 总是在<Html>标签前加入回复的内容。破坏整个html完整性）}
+    htmlBegin := FastPosNoCase(sHtml, '<HTML', Length(sHtml), 5, 1);
+    if htmlBegin > 10 then  {表示html前面还有东西}
+    begin
+      l_Str := Copy(sHtml, 1, htmlBegin-1);
+      l_Str := HtmlToText(l_Str, false, 200); //如果是控制字符则忽略
+      if Trim(l_Str)<>'' then
+        Exit;
+    end;
 
+    bodyBegin := FastPosNoCase(sHtml, '<BODY', Length(sHtml), 5, 1);
+    if bodyBegin <= 0 then
+      Exit;
 
-  bodyBegin := FastPosNoCase(sHtml, '<BODY', Length(sHtml), 5, 1);
-  if bodyBegin <= 0 then
-    Exit(_ReturnWithRemoveHtmlLabel);
+    bodyBegin := FastPosNoCase(sHtml, '>', Length(sHtml), 1, bodyBegin + 4);
+    if bodyBegin <= 0 then
+      Exit;
 
-  bodyBegin := FastPosNoCase(sHtml, '>', Length(sHtml), 1, bodyBegin + 4);
-  if bodyBegin <= 0 then
-    Exit(_ReturnWithRemoveHtmlLabel);
-
-  bodyEnd := FastPosNoCase(sHtml, '</BODY>', Length(sHtml), 7, bodyBegin + 1);
-  if bodyEnd <= 0 then
-    Exit(_ReturnWithRemoveHtmlLabel)
-  else
-    Result := Copy(sHtml, bodyBegin + 1, bodyEnd - bodyBegin - 1);
+    bodyEnd := FastPosNoCase(sHtml, '</BODY>', Length(sHtml), 7, bodyBegin + 1);
+    if bodyEnd <= 0 then
+      Exit
+    else
+      Result := Trim( Copy(sHtml, bodyBegin + 1, bodyEnd - bodyBegin - 1));
+  finally
+    while _RemoveFlag(Result, '<HTML') do ;
+    while _RemoveFlag(Result, '</HTML') do ;
+    Result := Str.FastReplace(Result, '<body', '<span', false);
+    Result := Str.FastReplace(Result, '</body>', '</span>', false);
+  end;
 end;
 
 class function HTML.HtmlToText(const AHtml: string;
@@ -1729,6 +1762,82 @@ begin
   end;
 end;
 
+class function HTML.RemoveBodyOverFlow(const AHtml: string): string;
+  function _TrueDelete(const AInStr: string): string;
+  const
+    c_Strs: array[0..1] of string = ('overflow: hidden;', 'overflow:hidden;');
+  begin
+    Result := AInStr;
+    while FastPosNoCase(Result, c_Strs[0])>0 do Result := FastReplace(Result, c_Strs[0], '');
+    while FastPosNoCase(Result, c_Strs[1])>0 do Result := FastReplace(Result, c_Strs[1], '');
+  end;
+  function _DeleteOverFlow(const AInStr: string): string;
+  var
+    l_BodyBegin, l_BodyEnd, l_Len: Integer;
+    l_s1, l_s2, l_s3: string;
+  begin
+    l_BodyBegin := FastPosNoCase(AInStr, 'body');
+    if l_BodyBegin>0 then
+    begin
+      l_BodyEnd := FastPosNoCase(AInStr, '}', l_BodyBegin);
+      if l_BodyEnd>l_BodyBegin then
+      begin
+        l_Len := 1; //Length('}')
+        l_s1 := Copy(AInStr, 1, l_BodyBegin-1);
+        l_s2 := Copy(AInStr, l_BodyBegin, l_BodyEnd-l_BodyBegin +l_Len);
+        l_s3 := Copy(AInStr, l_BodyEnd+l_Len, Length(AInStr));
+        Result := l_s1
+            + _TrueDelete(l_s2)
+            + _DeleteOverFlow(l_s3);
+        Exit;
+      end;
+    end;
+    Result := AInStr;
+  end;
+
+var
+  l_StyleBegin, l_StyleEnd, l_Len: Integer;
+  l_s1, l_s2, l_s3: string;
+begin
+  //去掉隐藏溢出 overflow: hidden
+  (*
+    <STYLE type=text/css>
+        body{
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            color: #989898;
+            font-size: 14px;
+            line-height: 17px;
+            overflow: hidden;
+        }
+    </STYLE>
+  *)
+  l_StyleBegin := FastPosNoCase(AHtml, '<STYLE type=');
+  if l_StyleBegin>0 then
+  begin
+    l_StyleEnd := FastPosNoCase(AHtml, '</STYLE>', l_StyleBegin);
+    if l_StyleEnd > l_StyleBegin then
+    begin
+      l_Len := 8; //Length('</STYLE>')
+      l_s1 := Copy(AHtml, 1, l_StyleBegin-1);
+      l_s2 := Copy(AHtml, l_StyleBegin, l_StyleEnd-l_StyleBegin +l_Len);
+      l_s3 := Copy(AHtml, l_StyleEnd+l_Len, Length(AHtml));
+      Result := l_s1
+          + _DeleteOverFlow(l_s2)
+          + RemoveBodyOverFlow(l_s3);
+      Exit;
+    end;
+  end;
+  Result := AHtml;
+end;
+
+class function HTML.RemoveContentEditable(const AHtml: string): string;
+begin
+
+  
+end;
+
 class function HTML.RemoveScript(const AHtml: string): string;
 var
   istart : Integer;
@@ -1767,13 +1876,49 @@ begin
 end;
 
 class function HTML.ReplaceHtmlSyntax(const AInputText: String): String;
+  function _TransLine(ALine: string):string;
+  var
+    I: Integer;
+    l_LineFisrt: string;
+  begin
+    l_LineFisrt := '';
+    for I := 1 to Length(ALine) do
+      if Trim(ALine[I]) = '' then
+        l_LineFisrt := l_LineFisrt + ALine[I]
+      else
+        Break;
+    if l_LineFisrt<>'' then
+    begin
+      l_LineFisrt := FastReplace(l_LineFisrt, ' ', '&nbsp;', True);
+      l_LineFisrt := FastReplace(l_LineFisrt, #9, '&nbsp;&nbsp;&nbsp;&nbsp;', True);
+      Result := l_LineFisrt + TrimLeft(ALine);
+    end
+    else
+      Result := ALine;
+  end;
+var
+  l_Text: TStringList;
+  I: Integer;
 begin
   Result := AInputText;
   Result := FastReplace(Result, '>', '&gt;', True);
   Result := FastReplace(Result, '<', '&lt;', True);
   Result := FastReplace(Result, '"', '&quot;', True);
-  Result := FastReplace(Result, ' ', '&nbsp;', True);
-//  Result := FastReplace(Result, #39, '&apos;', True);
+
+  //不能把空格全部替换为“&nbsp;”，这样会导致整一大段文字不会自动换行。
+  //解决办法：把行首的处理下就可以了。
+  //Result := FastReplace(Result, ' ', '&nbsp;', True);
+  l_Text := TStringList.Create;
+  try
+    l_Text.Text := Result;
+    for I := 0 to l_Text.Count - 1 do
+      l_Text[I] := _TransLine(l_Text[I]);
+    Result := l_Text.Text;
+  finally
+    l_Text.Free;
+  end;
+
+  //  Result := FastReplace(Result, #39, '&apos;', True);
 end;
 
 class function HTML.TextToHtml(const sText: string; const AReplaceHtmlFlag: Boolean): string;

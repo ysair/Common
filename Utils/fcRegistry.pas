@@ -12,8 +12,8 @@ type
     class function SH_GetKeyValueX64(vRoot:DWORD; const sKey, sName:string; const ADefault: string='') : string; static;
     class function SH_GetKeyIntValue(vRoot: DWORD; const sKey, sName: string; const ADefValue: Int64 = 0): Int64; static;
     class function SH_SetKeyIntValue(vRoot: DWORD; const sKey, sName: string; const AValue: Integer): boolean; static;
-
-
+    class function SH_DelKey(vRoot: DWORD; const sKey: string): Boolean; static;
+    class function SH_DelValue(vRoot: DWORD; const sKey, sName: string): Boolean; static;
 
     //------ 以下是对 TRegistry 类操作的
     class function ReadKeyValue(ARootKey: HKEY; AKeyPath, AName, ADefault: String): String; overload; static;
@@ -155,6 +155,22 @@ begin
     end;
     Free;
   end;
+end;
+
+class function Reg.SH_DelKey(vRoot: DWORD; const sKey: string): Boolean;
+var
+  ret : DWORD;
+begin
+  ret := SHDeleteKey(vRoot, PChar(sKey));
+  Result  :=  ret = ERROR_SUCCESS;
+end;
+
+class function Reg.SH_DelValue(vRoot: DWORD; const sKey, sName: string): Boolean;
+var
+  ret : DWORD;
+begin
+  ret := SHDeleteValue(vRoot, PChar(sKey), PChar(sName));
+  Result  :=  ret = ERROR_SUCCESS;
 end;
 
 class function Reg.SH_GetKeyIntValue(vRoot: DWORD; const sKey, sName: string;

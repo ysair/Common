@@ -28,6 +28,8 @@ type
     class function BroadcastMessage(Msg: UINT; wParam: wParam; lParam: lParam): Integer;
     procedure ShowOnTaskbarIcon;
     procedure FillActionHints; //将action空的hint用Caption填充
+    function DPIRatio: Single;
+    function DpiConvert(A96DpiValue: Integer): Integer;
   end;
 
   TScreenHelper = class helper for TScreen
@@ -215,6 +217,16 @@ begin
   Result := CreateIntoControl(AOwner);
 end;
 
+function TFormHelper.DpiConvert(A96DpiValue: Integer): Integer;
+begin
+  Result := A96DpiValue * Self.PixelsPerInch div 96;
+end;
+
+function TFormHelper.DPIRatio: Single;
+begin
+  Result := Self.PixelsPerInch / 96;
+end;
+
 class function TFormHelper.GetInstance: TForm;
 var
   i: Integer;
@@ -259,7 +271,7 @@ var // 非线程安全,线程中请使用 CFFunc.Win.BroadcastMessage
   i: Integer;
 begin
   Result := 0;
-  for i := 0 to Screen.FormCount - 1 do
+  for i := Screen.FormCount - 1 downto 0 do
   begin
     PostMessage(Screen.Forms[i].Handle, Msg, wParam, lParam);
     Inc(Result);
@@ -273,7 +285,7 @@ var // 非线程安全,线程中请使用 CFFunc.Win.BroadcastMessage
   exists : Boolean;
 begin
   Result := 0;
-  for i := 0 to Screen.FormCount - 1 do
+  for i := Screen.FormCount - 1 downto 0 do
   begin
     exists  :=  False;
     for j := Low(AExcludeHandles) to High(AExcludeHandles) do

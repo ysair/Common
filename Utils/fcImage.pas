@@ -5,13 +5,27 @@ unit fcImage;
 
 interface
 
-uses Graphics, Windows, Classes, ExtCtrls, pngimage, Controls, GIFImg, ImgList,
+uses Graphics, Windows, Classes, ExtCtrls, pngimage, Controls, GIFImg, ImgList, Forms,
   jpeg, SysUtils;
 
 type
   Image = record
   public
-    class function GetPicType(const bf: Pointer; const bflen: Integer): Integer; static;
+    class procedure ImageListDpiCovert(AImageList: TCustomImageList; AImgListWidthIn96Dpi, AImgListHeightIn96Dpi: Integer; const AConvertOrgImagesInList: Boolean=True); static;
+
+    //把一个TBitmap从转换成当前dpi大小
+    class function StretchBmpToCurrDpi(AInBmpIn96Dpi: Graphics.TBitmap): Graphics.TBitmap; static;
+    class function StretchBmp(AInBmpIn: Graphics.TBitmap; AOutWidth, AOutHeight: Integer): Graphics.TBitmap; static;
+
+    class function ImageListLoadPictureFile(AImageList: TImageList; AFileName: String; const AClearOrgImage: Boolean=true): Boolean; static;
+    class function ImageListLoadPictureFileWithStretch(AImageList: TImageList;
+        const AFileName: String;
+        const AImgFileOneIconWidth, AImgFileOneIconHeight: Integer;
+        const AClearOrgImage: Boolean=true): Boolean; static;
+
+
+    class function GetPicType(AFileName: string): Integer; overload; static;
+    class function GetPicType(const bf: Pointer; const bflen: Integer): Integer; overload; static;
 
     class function ImageListLoadFromBitmap(AImageList: TImageList; ABMP: Graphics.TBitmap;
         const AClearOrgImage: Boolean): Boolean; static;
@@ -19,7 +33,7 @@ type
     //加载一个图片文件到TImage， 加载的时候，会读取图片文件的前几个字节，判断图片的格式然后再加载。
     class function LoadAPicFileToImage(AFileName: String; AImage: TImage): Boolean; static;
 
-    //无损缩放一个图片，适合于按钮图片的拉伸
+    //无损缩放一个图片，适合于按钮图片的拉伸, 保留按钮的四个边角，然后把中间部分拉伸
     class procedure StretchBitmapWithEdge(AIn, AOut: Graphics.TBitmap; AOutWidth, AOutHeight: Integer;
         const AEdgeWidth: Integer=5;const AEdgeHeight: Integer=5); static;
 
@@ -125,6 +139,27 @@ begin
   result := True;
 end;
 
+class function Image.GetPicType(AFileName: string): Integer;
+var
+  l_Stream: TMemoryStream;
+begin
+  Result := 0;
+  if not FileExists(AFileName) then
+    Exit;
+
+  l_Stream := TMemoryStream.Create;
+  try
+    try
+      l_Stream.LoadFromFile(AFileName);
+      Result := GetPicType(l_Stream.Memory, l_Stream.Size);
+    except
+      Exit;
+    end;
+  finally
+    l_Stream.Free;
+  end;
+end;
+
 class function Image.GetPicType(const bf: Pointer;
   const bflen: Integer): Integer;
 // 判断图片格式 1:bmp 2:jpeg 3:gif 4:png
@@ -152,6 +187,76 @@ begin
     (PByte(p + 4)^ = FH_PNG[4]) and (PByte(p + 5)^ = FH_PNG[5]) and
     (PByte(p + 6)^ = FH_PNG[6]) and (PByte(p + 7)^ = FH_PNG[7]) then
     Result := 4
+end;
+
+class procedure Image.ImageListDpiCovert(AImageList: TCustomImageList; AImgListWidthIn96Dpi,
+  AImgListHeightIn96Dpi: Integer; const AConvertOrgImagesInList: Boolean);
+var
+  l_Radio: Real;
+  l_OrgBmps: array of Graphics.TBitmap;
+  I: Integer;
+  l_NewBmp: Graphics.TBitmap;
+begin
+  l_Radio := Screen.PixelsPerInch div 48 / 2;
+  if l_Radio <1 then
+    l_Radio := 1;
+
+(*  if Screen.PixelsPerInch>=288 then     {300%}
+    l_Radio := 3
+  else
+  if Screen.PixelsPerInch>=240 then     {250%}
+    l_Radio := 2.5
+  else
+  if Screen.PixelsPerInch>192 then     {200% 放大还是使用1.5的图}
+    l_Radio := 2
+  else
+  if Screen.PixelsPerInch>=144 then     {150%}
+    l_Radio := 1.5
+  else
+    l_Radio := 1;//*)
+
+  if l_Radio<>1 then
+  begin
+    {保存原来大小}
+    if AConvertOrgImagesInList then
+    begin
+      SetLength(l_OrgBmps, AImageList.Count);
+      for I := 0 to AImageList.Count - 1 do
+      begin
+        l_OrgBmps[I] := Graphics.TBitmap.Create;
+        l_OrgBmps[I].Width := AImageList.Width;
+        l_OrgBmps[I].Height := AImageList.Height;
+        l_OrgBmps[I].Canvas.Brush.Color := clFuchsia;
+        l_OrgBmps[I].Canvas.FillRect(Rect(0,0, AImageList.Width+1, AImageList.Height+1));
+        l_OrgBmps[I].Transparent := True;
+        AImageList.Draw(l_OrgBmps[I].Canvas, 0, 0, I, dsTransparent, itImage, True);
+        l_OrgBmps[I].Transparent := True;
+      end;
+    end;
+
+    {}
+    AImageList.Width := Trunc(AImgListWidthIn96Dpi * l_Radio);
+    AImageList.Height := Trunc(AImgListHeightIn96Dpi * l_Radio);
+    AImageList.Clear;
+
+    {把原图载入}
+    if AConvertOrgImagesInList then
+      for I := Low(l_OrgBmps) to High(l_OrgBmps) do
+      begin
+        l_NewBmp := Graphics.TBitmap.Create;
+        try
+          l_NewBmp.Width := AImageList.Width;
+          l_NewBmp.Height := AImageList.Height;
+          Windows.StretchBlt(l_NewBmp.Canvas.Handle, 0,0, l_NewBmp.Width, l_NewBmp.Height,
+              l_OrgBmps[I].Canvas.Handle, 0,0, l_OrgBmps[I].Width, l_OrgBmps[I].Height,
+              SRCCOPY);
+          AImageList.AddMasked(l_NewBmp, clFuchsia);
+        finally
+          l_NewBmp.Free;
+        end;
+        l_OrgBmps[I].Free;
+      end;
+  end;
 end;
 
 class function Image.ImageListDrawToAImage(AImageList: TImageList;
@@ -198,6 +303,61 @@ begin
     end;
   finally
     l_ABMP.Free;
+  end;
+end;
+
+class function Image.ImageListLoadPictureFile(AImageList: TImageList; AFileName: String;
+  const AClearOrgImage: Boolean): Boolean;
+begin
+  Result := ImageListLoadPictureFileWithStretch(AImageList, AFileName, AImageList.Width, AImageList.Height, AClearOrgImage);
+end;
+
+class function Image.ImageListLoadPictureFileWithStretch(AImageList: TImageList;
+  const AFileName: String; const AImgFileOneIconWidth, AImgFileOneIconHeight: Integer;
+  const AClearOrgImage: Boolean): Boolean;
+var
+  I, l_X, l_Y, l_Row, l_Col: Integer;
+  l_SrcPic, l_SrcBmp, l_StretchBmp: Graphics.TBitmap;
+const
+  l_BKColor = clFuchsia;
+begin
+  if not FileExists(AFileName) then
+    Exit(False);
+
+  Result := True;
+  if AClearOrgImage then
+    AImageList.Clear;
+
+  l_SrcBmp  := Graphics.TBitmap.Create;
+  l_SrcPic := Graphics.TBitmap.Create;
+  try
+    l_SrcPic.LoadFromFile(AFileName);
+    l_Row := l_SrcPic.Height  div AImgFileOneIconHeight;  //多少行
+    l_Col := l_SrcPic.Width div AImgFileOneIconWidth;     //多少列
+    l_SrcBmp.Height := AImgFileOneIconHeight;
+    l_SrcBmp.Width := AImgFileOneIconWidth;
+
+    for I := 0 to l_Col * l_Row-1 do
+    begin
+      l_X := (I mod l_Col) * AImgFileOneIconWidth;
+      l_Y := (I div l_Col) * AImgFileOneIconHeight;
+      BitBlt(l_SrcBmp.Canvas.Handle, 0, 0, AImgFileOneIconWidth, AImgFileOneIconHeight,
+          l_SrcPic.Canvas.Handle, l_X, l_Y, SRCCOPY);
+      if (AImgFileOneIconWidth<>AImageList.Width) or (AImgFileOneIconHeight<>AImageList.Height) then
+      begin
+        l_StretchBmp := Image.StretchBmp(l_SrcBmp, AImageList.Width, AImageList.Height);
+        try
+          AImageList.AddMasked(l_StretchBmp, l_BKColor);
+        finally
+          l_StretchBmp.Free;
+        end;
+      end
+      else
+        AImageList.AddMasked(l_SrcBmp, l_BKColor);
+    end;
+  finally
+    l_SrcBmp.Free;
+    l_SrcPic.Free;
   end;
 end;
 
@@ -340,6 +500,30 @@ begin
 end;
 
 
+class function Image.StretchBmp(AInBmpIn: Graphics.TBitmap; AOutWidth,
+  AOutHeight: Integer): Graphics.TBitmap;
+begin
+  Result := Graphics.TBitmap.Create;
+  Result.Width := AOutWidth;
+  Result.Height := AOutHeight;
+  Windows.StretchBlt(Result.Canvas.Handle, 0,0, Result.Width, Result.Height,
+      AInBmpIn.Canvas.Handle, 0,0, AInBmpIn.Width, AInBmpIn.Height,
+      SRCCOPY);
+end;
+
+class function Image.StretchBmpToCurrDpi(AInBmpIn96Dpi: Graphics.TBitmap): Graphics.TBitmap;
+var
+  l_Radio: Real;
+  l_Width, l_Height: Integer;
+begin
+  l_Radio := Screen.PixelsPerInch div 48 / 2;
+  if l_Radio <1 then
+    l_Radio := 1;
+  l_Width := Trunc(AInBmpIn96Dpi.Width * l_Radio);
+  l_Height := Trunc(AInBmpIn96Dpi.Height * l_Radio);
+  Result := Image.StretchBmp(AInBmpIn96Dpi, l_Width, l_Height);
+end;
+
 class function Image.ZoomAPicture(ASrcFile, ADestFile: String; AMaxOutWidth,
   AMaxOutHeight: Integer; TransparentBmpFile: Boolean): Boolean;
   procedure _ZoomBmp(imagen: Graphics.TBitMap; dWidth, dHeight: Integer; var des: Graphics.TBitMap);
@@ -441,6 +625,5 @@ begin
     l_SrcBmp.free;
   end;
 end;
-
 
 end.
