@@ -14,12 +14,48 @@ type
     class function ReadAttributesToDateTime(ANode: IXMLNode; const AAttribName: string; const ADefValue:TDateTime=0): TDateTime; static;
 
     class function WriteAttribute(ANode: IXMLNode; const AAttribName: string; AStrValue: string): Boolean; static;
+    class function FindXMLNode(const ARoot : IXMLNode; const ANodePath : string) : IXMLNode; static;
+    class function TryGetNodeValue(const ARoot : IXMLNode; const ANodePath : string; var AValue : OleVariant):boolean; static;
+    class function GetNodeValue(const ARoot : IXMLNode; const ANodePath : string; const ADefValue : string = ''):string; static;
   end;
 
 implementation
 
 
 { XML }
+
+class function XML.FindXMLNode(const ARoot: IXMLNode;
+  const ANodePath: string): IXMLNode;
+//查找XMLNode,返回接口
+//可以查找多层节点,如 Root\NodeA\NodeB
+var
+  lst : TStrings;
+  i : Integer;
+  j : Integer;
+  found : Boolean;
+begin
+  Result  :=  ARoot;
+  if not Assigned(Result) then Exit;
+  lst :=  TStringList.Create;
+  try
+    ExtractStrings(['/', '\'], [], PChar(ANodePath), lst);
+    for i := 0 to lst.Count - 1 do
+    begin //FindNode有bug,有的节点找不到
+      found :=  False;
+      for j := 0 to Result.ChildNodes.Count - 1 do
+        if Result.ChildNodes[j].NodeName = lst[i] then
+        begin
+          Result  :=  Result.ChildNodes[j];
+          found :=  True;
+          Break;
+        end;
+      if not found then
+        exit(nil);
+    end;
+  finally
+    lst.Free;
+  end;
+end;
 
 class function XML.ReadAttributesToBool(ANode: IXMLNode; const AAttribName: string;
   const ADefValue: Boolean): Boolean;
@@ -66,6 +102,29 @@ begin
     Result := VarToStrDef(l_Node.NodeValue, ADefValue)
   else
     Result := VarToStrDef(ANode.Attributes[AAttribName], ADefValue);
+end;
+
+class function XML.GetNodeValue(const ARoot: IXMLNode;
+  const ANodePath: string; const ADefValue : string): string;
+var
+  node : IXMLNode;
+begin
+  node  :=  FindXMLNode(ARoot, ANodePath);
+  if Assigned(node) then
+    Result  :=  VarToStr(node.NodeValue)
+  else
+    Result  :=  ADefValue;
+end;
+
+class function XML.TryGetNodeValue(const ARoot: IXMLNode;
+  const ANodePath: string; var AValue: OleVariant): boolean;
+var
+  node : IXMLNode;
+begin
+  node  :=  FindXMLNode(ARoot, ANodePath);
+  Result  :=  Assigned(node);
+  if Result then
+    AValue  :=  node.NodeValue;
 end;
 
 class function XML.WriteAttribute(ANode: IXMLNode; const AAttribName: string;

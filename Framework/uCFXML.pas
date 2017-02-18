@@ -21,6 +21,8 @@ type
     class function  ForcePath(const ANode : IXMLNode; const ANodePath : string) : IXMLNode; static;
     class function  FindXMLNode(const ARoot : IXMLNode; const ANodePath : string) : IXMLNode; overload; static;
     class function  FindXMLNode(const ADoc : IXMLDocument; const ANodePath : string) : IXMLNode; overload; static;
+    class function  TryGetNodeValue(const ARoot : IXMLNode; const ANodePath : string; var AValue : OleVariant):boolean; static;
+    class function  GetNodeValue(const ARoot : IXMLNode; const ANodePath : string; const ADefValue : string = ''):string; static;
     class function  ReadPropertiesFromXMLNode(const AObj : TObject; const AIntf : IInterface; const ANodePath : string = '') : Boolean; static;
     class function  ReadPropertiesFromXML(const AObj : TObject; const AXML : string; const ANodePath : string) : boolean; static;
     class function  ReadPropertiesFromXMLFile(const AObj : TObject; const AFileName : string; const ANodePath : string) : Boolean; static;
@@ -162,6 +164,18 @@ begin
   end;
 end;
 
+class function TCFXml.GetNodeValue(const ARoot: IXMLNode; const ANodePath,
+  ADefValue: string): string;
+var
+  node : IXMLNode;
+begin
+  node  :=  FindXMLNode(ARoot, ANodePath);
+  if Assigned(node) then
+    Result  :=  VarToStr(node.NodeValue)
+  else
+    Result  :=  ADefValue;
+end;
+
 class function TCFXml.FindXMLNode(const ARoot: IXMLNode;
   const ANodePath: string): IXMLNode;
 //查找XMLNode,返回接口
@@ -169,6 +183,8 @@ class function TCFXml.FindXMLNode(const ARoot: IXMLNode;
 var
   lst : TStrings;
   i : Integer;
+  j : Integer;
+  found : Boolean;
 begin
   Result  :=  ARoot;
   if not Assigned(Result) then Exit;
@@ -176,9 +192,17 @@ begin
   try
     ExtractStrings(['/', '\'], [], PChar(ANodePath), lst);
     for i := 0 to lst.Count - 1 do
-    begin
-      Result  :=  Result.ChildNodes.FindNode(lst[i]);
-      if not Assigned(Result) then Break;
+    begin //FindNode有bug,有的节点找不到
+      found :=  False;
+      for j := 0 to Result.ChildNodes.Count - 1 do
+        if Result.ChildNodes[j].NodeName = lst[i] then
+        begin
+          Result  :=  Result.ChildNodes[j];
+          found :=  True;
+          Break;
+        end;
+      if not found then
+        exit(nil);
     end;
   finally
     lst.Free;
@@ -280,6 +304,17 @@ begin
     FreeMem(plist, plen * SizeOf(Pointer));
   end;
   Result  :=  True;
+end;
+
+class function TCFXml.TryGetNodeValue(const ARoot: IXMLNode;
+  const ANodePath: string; var AValue: OleVariant): boolean;
+var
+  node : IXMLNode;
+begin
+  node  :=  FindXMLNode(ARoot, ANodePath);
+  Result  :=  Assigned(node);
+  if Result then
+    AValue  :=  node.NodeValue;
 end;
 
 class function TCFXml.ReadPropertiesFromXML(const AObj: TObject; const AXML,
