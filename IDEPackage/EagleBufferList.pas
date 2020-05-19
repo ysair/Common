@@ -6,7 +6,7 @@ procedure Register;
 
 implementation
 
-uses Windows, Classes, SysUtils, Menus, ToolsAPI, Controls;
+uses Windows, Classes, SysUtils, ToolsAPI, Menus;
 
 type
   TBufferList = class(TNotifierObject, IUnknown, IOTANotifier,
@@ -24,7 +24,7 @@ type
 resourcestring
   sBufferList = 'Eagle''s Buffer List';
 
-  // register this key binding
+// register this key binding
 procedure Register;
 begin
   (BorlandIDEServices as IOTAKeyBoardServices).AddKeyboardBinding(TBufferList.Create);
@@ -46,11 +46,8 @@ end;
 procedure TBufferList.CodeCompletion(const Context: IOTAKeyContext;
   KeyCode: TShortcut; var BindingResult: TKeyBindingResult);
 begin
-
-  (Context.EditBuffer.TopView as IOTAEditActions)
-  .CodeCompletion(Byte(Context.Context));
+  (Context.EditBuffer.TopView as IOTAEditActions).CodeCompletion(Byte(Context.Context));
   BindingResult := krHandled;
-
 end;
 
 function TBufferList.GetBindingType: TBindingType;
